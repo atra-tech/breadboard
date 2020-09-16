@@ -1,0 +1,188 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_OUTPUT_MODE	u-ctags	/u-ctags or e-ctags/
+!_TAG_PROGRAM_AUTHOR	Universal Ctags Team	//
+!_TAG_PROGRAM_NAME	Universal Ctags	/Derived from Exuberant Ctags/
+!_TAG_PROGRAM_URL	https://ctags.io/	/official site/
+!_TAG_PROGRAM_VERSION	0.0.0	/3fdf28bc/
+ARG_DECIMAL	util/log.h	/^    ARG_DECIMAL = 'i',$/;"	e	enum:log_args	access:public
+ARG_DOUBLE	util/log.h	/^    ARG_DOUBLE  = 'd',$/;"	e	enum:log_args	access:public
+ARG_FLOAT	util/log.h	/^    ARG_FLOAT   = 'f',$/;"	e	enum:log_args	access:public
+ARG_HEX	util/log.h	/^    ARG_HEX     = 'x',$/;"	e	enum:log_args	access:public
+ARG_LONG	util/log.h	/^    ARG_LONG    = 'l',$/;"	e	enum:log_args	access:public
+ARG_STRING	util/log.h	/^    ARG_STRING  = 's'$/;"	e	enum:log_args	access:public
+ATRA_LOG_H	util/log.h	/^#define ATRA_LOG_H$/;"	d
+ATRA_MATRIX_H	math/matrix.h	/^#define ATRA_MATRIX_H$/;"	d
+ATRA_STATE_H	state.h	/^#define ATRA_STATE_H$/;"	d
+ATRA_VECTOR_H	math/vector.h	/^#define ATRA_VECTOR_H$/;"	d
+ATTR_BLINKOFF	util/log.h	/^    ATTR_BLINKOFF = 25$/;"	e	enum:log_attr	access:public
+ATTR_BLINKON	util/log.h	/^    ATTR_BLINKON  = 5,$/;"	e	enum:log_attr	access:public
+ATTR_BOLDOFF	util/log.h	/^    ATTR_BOLDOFF  = 22,$/;"	e	enum:log_attr	access:public
+ATTR_BOLDON	util/log.h	/^    ATTR_BOLDON   = 1,$/;"	e	enum:log_attr	access:public
+ATTR_INVERT	util/log.h	/^    ATTR_INVERT   = 7,$/;"	e	enum:log_attr	access:public
+ATTR_NONE	util/log.h	/^    ATTR_NONE     = 0,$/;"	e	enum:log_attr	access:public
+BGCOLOR_BLUE	util/log.h	/^    BGCOLOR_BLUE    = 44,$/;"	e	enum:log_bgcolor	access:public
+BGCOLOR_CYAN	util/log.h	/^    BGCOLOR_CYAN    = 46,$/;"	e	enum:log_bgcolor	access:public
+BGCOLOR_DEFAULT	util/log.h	/^    BGCOLOR_DEFAULT = 48$/;"	e	enum:log_bgcolor	access:public
+BGCOLOR_GREEN	util/log.h	/^    BGCOLOR_GREEN   = 42,$/;"	e	enum:log_bgcolor	access:public
+BGCOLOR_MAGENTA	util/log.h	/^    BGCOLOR_MAGENTA = 45,$/;"	e	enum:log_bgcolor	access:public
+BGCOLOR_RED	util/log.h	/^    BGCOLOR_RED     = 41,$/;"	e	enum:log_bgcolor	access:public
+BGCOLOR_WHITE	util/log.h	/^    BGCOLOR_WHITE   = 47,$/;"	e	enum:log_bgcolor	access:public
+BGCOLOR_YELLOW	util/log.h	/^    BGCOLOR_YELLOW  = 43,$/;"	e	enum:log_bgcolor	access:public
+FGCOLOR_BLUE	util/log.h	/^    FGCOLOR_BLUE    = 94,$/;"	e	enum:log_fgcolor	access:public
+FGCOLOR_CYAN	util/log.h	/^    FGCOLOR_CYAN    = 96,$/;"	e	enum:log_fgcolor	access:public
+FGCOLOR_DEFAULT	util/log.h	/^    FGCOLOR_DEFAULT = 98$/;"	e	enum:log_fgcolor	access:public
+FGCOLOR_GREEN	util/log.h	/^    FGCOLOR_GREEN   = 92,$/;"	e	enum:log_fgcolor	access:public
+FGCOLOR_MAGENTA	util/log.h	/^    FGCOLOR_MAGENTA = 95,$/;"	e	enum:log_fgcolor	access:public
+FGCOLOR_RED	util/log.h	/^    FGCOLOR_RED     = 91,$/;"	e	enum:log_fgcolor	access:public
+FGCOLOR_WHITE	util/log.h	/^    FGCOLOR_WHITE   = 97,$/;"	e	enum:log_fgcolor	access:public
+FGCOLOR_YELLOW	util/log.h	/^    FGCOLOR_YELLOW  = 93,$/;"	e	enum:log_fgcolor	access:public
+LOG_ATTR	util/log.h	/^#define LOG_ATTR(/;"	d	signature:(x)
+LOG_DEFAULT_SIZE	util/log.h	/^#define LOG_DEFAULT_SIZE /;"	d
+LOG_ERROR	util/log.h	/^    LOG_ERROR,$/;"	e	enum:log_mode	access:public
+LOG_FATAL	util/log.h	/^    LOG_FATAL$/;"	e	enum:log_mode	access:public
+LOG_INFO	util/log.h	/^    LOG_INFO,$/;"	e	enum:log_mode	access:public
+LOG_MAX_ENTRY_SIZE	util/log.h	/^#define LOG_MAX_ENTRY_SIZE /;"	d
+LOG_WARN	util/log.h	/^    LOG_WARN,$/;"	e	enum:log_mode	access:public
+Log	util/log.c	/^} Log;$/;"	t	typeref:struct:__anonacfac0050108	file:
+Mat2f	math/matrix.h	/^} Mat2f;$/;"	t	typeref:struct:__anon13882cc90108
+Mat3f	math/matrix.h	/^} Mat3f;$/;"	t	typeref:struct:__anon13882cc90208
+Mat4f	math/matrix.h	/^} Mat4f;$/;"	t	typeref:struct:__anon13882cc90308
+STATE_ATRA_LOAD	state.h	/^    STATE_ATRA_LOAD,$/;"	e	enum:engine_state	access:public
+STATE_ATRA_PRELOAD	state.h	/^    STATE_ATRA_PRELOAD,$/;"	e	enum:engine_state	access:public
+STATE_ATRA_RUNNING	state.h	/^    STATE_ATRA_RUNNING,$/;"	e	enum:engine_state	access:public
+STATE_ATRA_SHUTDOWN	state.h	/^    STATE_ATRA_SHUTDOWN,$/;"	e	enum:engine_state	access:public
+STATE_ATRA_START	state.h	/^    STATE_ATRA_START,$/;"	e	enum:engine_state	access:public
+STATE_ATRA_TOTAL	state.h	/^    STATE_ATRA_TOTAL$/;"	e	enum:engine_state	access:public
+STATE_GAME_MENU	state.h	/^    STATE_GAME_MENU,$/;"	e	enum:game_state	access:public
+STATE_GAME_PLAY	state.h	/^    STATE_GAME_PLAY,$/;"	e	enum:game_state	access:public
+STATE_GAME_SPLASH	state.h	/^    STATE_GAME_SPLASH,$/;"	e	enum:game_state	access:public
+STATE_GAME_STOP	state.h	/^    STATE_GAME_STOP,$/;"	e	enum:game_state	access:public
+STATE_GAME_TOTAL	state.h	/^    STATE_GAME_TOTAL$/;"	e	enum:game_state	access:public
+Vec2f	math/vector.h	/^} Vec2f;$/;"	t	typeref:struct:__anon6e414ac70308
+Vec2i	math/vector.h	/^} Vec2i;$/;"	t	typeref:struct:__anon6e414ac70108
+Vec3f	math/vector.h	/^} Vec3f;$/;"	t	typeref:struct:__anon6e414ac70408
+Vec3i	math/vector.h	/^} Vec3i;$/;"	t	typeref:struct:__anon6e414ac70208
+__anon13882cc90108	math/matrix.h	/^typedef struct {$/;"	s
+__anon13882cc90108::a0	math/matrix.h	/^    float a0, a1;$/;"	m	struct:__anon13882cc90108	typeref:typename:float	access:public
+__anon13882cc90108::a1	math/matrix.h	/^    float a0, a1;$/;"	m	struct:__anon13882cc90108	typeref:typename:float	access:public
+__anon13882cc90108::b0	math/matrix.h	/^    float b0, b1;$/;"	m	struct:__anon13882cc90108	typeref:typename:float	access:public
+__anon13882cc90108::b1	math/matrix.h	/^    float b0, b1;$/;"	m	struct:__anon13882cc90108	typeref:typename:float	access:public
+__anon13882cc90208	math/matrix.h	/^typedef struct {$/;"	s
+__anon13882cc90208::a0	math/matrix.h	/^    float a0, a1, a2;$/;"	m	struct:__anon13882cc90208	typeref:typename:float	access:public
+__anon13882cc90208::a1	math/matrix.h	/^    float a0, a1, a2;$/;"	m	struct:__anon13882cc90208	typeref:typename:float	access:public
+__anon13882cc90208::a2	math/matrix.h	/^    float a0, a1, a2;$/;"	m	struct:__anon13882cc90208	typeref:typename:float	access:public
+__anon13882cc90208::b0	math/matrix.h	/^    float b0, b1, b2;$/;"	m	struct:__anon13882cc90208	typeref:typename:float	access:public
+__anon13882cc90208::b1	math/matrix.h	/^    float b0, b1, b2;$/;"	m	struct:__anon13882cc90208	typeref:typename:float	access:public
+__anon13882cc90208::b2	math/matrix.h	/^    float b0, b1, b2;$/;"	m	struct:__anon13882cc90208	typeref:typename:float	access:public
+__anon13882cc90208::c0	math/matrix.h	/^    float c0, c1, c2;$/;"	m	struct:__anon13882cc90208	typeref:typename:float	access:public
+__anon13882cc90208::c1	math/matrix.h	/^    float c0, c1, c2;$/;"	m	struct:__anon13882cc90208	typeref:typename:float	access:public
+__anon13882cc90208::c2	math/matrix.h	/^    float c0, c1, c2;$/;"	m	struct:__anon13882cc90208	typeref:typename:float	access:public
+__anon13882cc90308	math/matrix.h	/^typedef struct {$/;"	s
+__anon13882cc90308::a0	math/matrix.h	/^    float a0, a1, a2, a3;$/;"	m	struct:__anon13882cc90308	typeref:typename:float	access:public
+__anon13882cc90308::a1	math/matrix.h	/^    float a0, a1, a2, a3;$/;"	m	struct:__anon13882cc90308	typeref:typename:float	access:public
+__anon13882cc90308::a2	math/matrix.h	/^    float a0, a1, a2, a3;$/;"	m	struct:__anon13882cc90308	typeref:typename:float	access:public
+__anon13882cc90308::a3	math/matrix.h	/^    float a0, a1, a2, a3;$/;"	m	struct:__anon13882cc90308	typeref:typename:float	access:public
+__anon13882cc90308::b0	math/matrix.h	/^    float b0, b1, b2, b3;$/;"	m	struct:__anon13882cc90308	typeref:typename:float	access:public
+__anon13882cc90308::b1	math/matrix.h	/^    float b0, b1, b2, b3;$/;"	m	struct:__anon13882cc90308	typeref:typename:float	access:public
+__anon13882cc90308::b2	math/matrix.h	/^    float b0, b1, b2, b3;$/;"	m	struct:__anon13882cc90308	typeref:typename:float	access:public
+__anon13882cc90308::b3	math/matrix.h	/^    float b0, b1, b2, b3;$/;"	m	struct:__anon13882cc90308	typeref:typename:float	access:public
+__anon13882cc90308::c0	math/matrix.h	/^    float c0, c1, c2, c3;$/;"	m	struct:__anon13882cc90308	typeref:typename:float	access:public
+__anon13882cc90308::c1	math/matrix.h	/^    float c0, c1, c2, c3;$/;"	m	struct:__anon13882cc90308	typeref:typename:float	access:public
+__anon13882cc90308::c2	math/matrix.h	/^    float c0, c1, c2, c3;$/;"	m	struct:__anon13882cc90308	typeref:typename:float	access:public
+__anon13882cc90308::c3	math/matrix.h	/^    float c0, c1, c2, c3;$/;"	m	struct:__anon13882cc90308	typeref:typename:float	access:public
+__anon13882cc90308::d0	math/matrix.h	/^    float d0, d1, d2, d3;$/;"	m	struct:__anon13882cc90308	typeref:typename:float	access:public
+__anon13882cc90308::d1	math/matrix.h	/^    float d0, d1, d2, d3;$/;"	m	struct:__anon13882cc90308	typeref:typename:float	access:public
+__anon13882cc90308::d2	math/matrix.h	/^    float d0, d1, d2, d3;$/;"	m	struct:__anon13882cc90308	typeref:typename:float	access:public
+__anon13882cc90308::d3	math/matrix.h	/^    float d0, d1, d2, d3;$/;"	m	struct:__anon13882cc90308	typeref:typename:float	access:public
+__anon6e414ac70108	math/vector.h	/^typedef struct {$/;"	s
+__anon6e414ac70108::x	math/vector.h	/^    float x;$/;"	m	struct:__anon6e414ac70108	typeref:typename:float	access:public
+__anon6e414ac70108::y	math/vector.h	/^    float y;$/;"	m	struct:__anon6e414ac70108	typeref:typename:float	access:public
+__anon6e414ac70208	math/vector.h	/^typedef struct {$/;"	s
+__anon6e414ac70208::x	math/vector.h	/^    int x;$/;"	m	struct:__anon6e414ac70208	typeref:typename:int	access:public
+__anon6e414ac70208::y	math/vector.h	/^    int y;$/;"	m	struct:__anon6e414ac70208	typeref:typename:int	access:public
+__anon6e414ac70208::z	math/vector.h	/^    int z;$/;"	m	struct:__anon6e414ac70208	typeref:typename:int	access:public
+__anon6e414ac70308	math/vector.h	/^typedef struct {$/;"	s
+__anon6e414ac70308::x	math/vector.h	/^    float x;$/;"	m	struct:__anon6e414ac70308	typeref:typename:float	access:public
+__anon6e414ac70308::y	math/vector.h	/^    float y;$/;"	m	struct:__anon6e414ac70308	typeref:typename:float	access:public
+__anon6e414ac70408	math/vector.h	/^typedef struct {$/;"	s
+__anon6e414ac70408::x	math/vector.h	/^    float x;$/;"	m	struct:__anon6e414ac70408	typeref:typename:float	access:public
+__anon6e414ac70408::y	math/vector.h	/^    float y;$/;"	m	struct:__anon6e414ac70408	typeref:typename:float	access:public
+__anon6e414ac70408::z	math/vector.h	/^    float z;$/;"	m	struct:__anon6e414ac70408	typeref:typename:float	access:public
+__anonacfac0050108	util/log.c	/^typedef struct {$/;"	s	file:
+__anonacfac0050108::ents	util/log.c	/^    char **ents;$/;"	m	struct:__anonacfac0050108	typeref:typename:char **	file:	access:public
+__anonacfac0050108::init	util/log.c	/^    int init;$/;"	m	struct:__anonacfac0050108	typeref:typename:int	file:	access:public
+__anonacfac0050108::modes	util/log.c	/^    int *modes;$/;"	m	struct:__anonacfac0050108	typeref:typename:int *	file:	access:public
+__anonacfac0050108::size	util/log.c	/^    int size;$/;"	m	struct:__anonacfac0050108	typeref:typename:int	file:	access:public
+a0	math/matrix.h	/^    float a0, a1, a2, a3;$/;"	m	struct:__anon13882cc90308	typeref:typename:float	access:public
+a0	math/matrix.h	/^    float a0, a1, a2;$/;"	m	struct:__anon13882cc90208	typeref:typename:float	access:public
+a0	math/matrix.h	/^    float a0, a1;$/;"	m	struct:__anon13882cc90108	typeref:typename:float	access:public
+a1	math/matrix.h	/^    float a0, a1, a2, a3;$/;"	m	struct:__anon13882cc90308	typeref:typename:float	access:public
+a1	math/matrix.h	/^    float a0, a1, a2;$/;"	m	struct:__anon13882cc90208	typeref:typename:float	access:public
+a1	math/matrix.h	/^    float a0, a1;$/;"	m	struct:__anon13882cc90108	typeref:typename:float	access:public
+a2	math/matrix.h	/^    float a0, a1, a2, a3;$/;"	m	struct:__anon13882cc90308	typeref:typename:float	access:public
+a2	math/matrix.h	/^    float a0, a1, a2;$/;"	m	struct:__anon13882cc90208	typeref:typename:float	access:public
+a3	math/matrix.h	/^    float a0, a1, a2, a3;$/;"	m	struct:__anon13882cc90308	typeref:typename:float	access:public
+b0	math/matrix.h	/^    float b0, b1, b2, b3;$/;"	m	struct:__anon13882cc90308	typeref:typename:float	access:public
+b0	math/matrix.h	/^    float b0, b1, b2;$/;"	m	struct:__anon13882cc90208	typeref:typename:float	access:public
+b0	math/matrix.h	/^    float b0, b1;$/;"	m	struct:__anon13882cc90108	typeref:typename:float	access:public
+b1	math/matrix.h	/^    float b0, b1, b2, b3;$/;"	m	struct:__anon13882cc90308	typeref:typename:float	access:public
+b1	math/matrix.h	/^    float b0, b1, b2;$/;"	m	struct:__anon13882cc90208	typeref:typename:float	access:public
+b1	math/matrix.h	/^    float b0, b1;$/;"	m	struct:__anon13882cc90108	typeref:typename:float	access:public
+b2	math/matrix.h	/^    float b0, b1, b2, b3;$/;"	m	struct:__anon13882cc90308	typeref:typename:float	access:public
+b2	math/matrix.h	/^    float b0, b1, b2;$/;"	m	struct:__anon13882cc90208	typeref:typename:float	access:public
+b3	math/matrix.h	/^    float b0, b1, b2, b3;$/;"	m	struct:__anon13882cc90308	typeref:typename:float	access:public
+c0	math/matrix.h	/^    float c0, c1, c2, c3;$/;"	m	struct:__anon13882cc90308	typeref:typename:float	access:public
+c0	math/matrix.h	/^    float c0, c1, c2;$/;"	m	struct:__anon13882cc90208	typeref:typename:float	access:public
+c1	math/matrix.h	/^    float c0, c1, c2, c3;$/;"	m	struct:__anon13882cc90308	typeref:typename:float	access:public
+c1	math/matrix.h	/^    float c0, c1, c2;$/;"	m	struct:__anon13882cc90208	typeref:typename:float	access:public
+c2	math/matrix.h	/^    float c0, c1, c2, c3;$/;"	m	struct:__anon13882cc90308	typeref:typename:float	access:public
+c2	math/matrix.h	/^    float c0, c1, c2;$/;"	m	struct:__anon13882cc90208	typeref:typename:float	access:public
+c3	math/matrix.h	/^    float c0, c1, c2, c3;$/;"	m	struct:__anon13882cc90308	typeref:typename:float	access:public
+checkmalloc	util/log.c	/^checkmalloc(void *ptr) {$/;"	f	typeref:typename:int	signature:(void * ptr)
+checkmalloc	util/log.c	/^static int checkmalloc(void *);$/;"	p	typeref:typename:int	file:	signature:(void *)
+d0	math/matrix.h	/^    float d0, d1, d2, d3;$/;"	m	struct:__anon13882cc90308	typeref:typename:float	access:public
+d1	math/matrix.h	/^    float d0, d1, d2, d3;$/;"	m	struct:__anon13882cc90308	typeref:typename:float	access:public
+d2	math/matrix.h	/^    float d0, d1, d2, d3;$/;"	m	struct:__anon13882cc90308	typeref:typename:float	access:public
+d3	math/matrix.h	/^    float d0, d1, d2, d3;$/;"	m	struct:__anon13882cc90308	typeref:typename:float	access:public
+engine_state	state.c	/^static int engine_state;$/;"	v	typeref:typename:int	file:
+engine_state	state.h	/^enum engine_state {$/;"	g
+ents	util/log.c	/^    char **ents;$/;"	m	struct:__anonacfac0050108	typeref:typename:char **	file:	access:public
+game_state	state.c	/^static int game_state;$/;"	v	typeref:typename:int	file:
+game_state	state.h	/^enum game_state {$/;"	g
+init	util/log.c	/^    int init;$/;"	m	struct:__anonacfac0050108	typeref:typename:int	file:	access:public
+log	util/log.c	/^static Log log;$/;"	v	typeref:typename:Log	file:
+log_args	util/log.h	/^enum log_args {$/;"	g
+log_attr	util/log.h	/^enum log_attr {$/;"	g
+log_bgcolor	util/log.h	/^enum log_bgcolor {$/;"	g
+log_fgcolor	util/log.h	/^enum log_fgcolor {$/;"	g
+log_mode	util/log.h	/^enum log_mode {$/;"	g
+loginit	util/log.c	/^loginit()$/;"	f	typeref:typename:int	signature:()
+loginit	util/log.h	/^int loginit();$/;"	p	typeref:typename:int	signature:()
+logprint	util/log.c	/^logprint(int mode, char *str, ...)$/;"	f	typeref:typename:void	signature:(int mode,char * str,...)
+logprint	util/log.h	/^void logprint(int mode, char *msg, ...);$/;"	p	typeref:typename:void	signature:(int mode,char * msg,...)
+logsave	util/log.c	/^logsave()$/;"	f	typeref:typename:int	signature:()
+logsave	util/log.h	/^int logsave();$/;"	p	typeref:typename:int	signature:()
+logstop	util/log.c	/^logstop()$/;"	f	typeref:typename:void	signature:()
+logstop	util/log.h	/^void logstop();$/;"	p	typeref:typename:void	signature:()
+main	main.c	/^main()$/;"	f	typeref:typename:int	signature:()
+matmult_2	math/matrix.c	/^matmult_2(const Mat2f *mat_a, const Mat2f *mat_b)$/;"	f	typeref:typename:Mat2f	signature:(const Mat2f * mat_a,const Mat2f * mat_b)
+matmult_2	math/matrix.h	/^Mat2f matmult_2(const Mat2f *, const Mat2f *);$/;"	p	typeref:typename:Mat2f	signature:(const Mat2f *,const Mat2f *)
+matmult_3	math/matrix.c	/^matmult_3(const Mat3f *mat_a, const Mat3f *mat_b)$/;"	f	typeref:typename:Mat3f	signature:(const Mat3f * mat_a,const Mat3f * mat_b)
+matmult_3	math/matrix.h	/^Mat3f matmult_3(const Mat3f *, const Mat3f *);$/;"	p	typeref:typename:Mat3f	signature:(const Mat3f *,const Mat3f *)
+matmult_4	math/matrix.c	/^matmult_4(const Mat4f *mat_a, const Mat4f *mat_b)$/;"	f	typeref:typename:Mat4f	signature:(const Mat4f * mat_a,const Mat4f * mat_b)
+matmult_4	math/matrix.h	/^Mat4f matmult_4(const Mat4f *, const Mat4f *);$/;"	p	typeref:typename:Mat4f	signature:(const Mat4f *,const Mat4f *)
+modes	util/log.c	/^    int *modes;$/;"	m	struct:__anonacfac0050108	typeref:typename:int *	file:	access:public
+set_enginestate	state.h	/^void set_enginestate();$/;"	p	typeref:typename:void	signature:()
+set_gamestate	state.h	/^void set_gamestate();$/;"	p	typeref:typename:void	signature:()
+size	util/log.c	/^    int size;$/;"	m	struct:__anonacfac0050108	typeref:typename:int	file:	access:public
+x	math/vector.h	/^    float x;$/;"	m	struct:__anon6e414ac70108	typeref:typename:float	access:public
+x	math/vector.h	/^    float x;$/;"	m	struct:__anon6e414ac70308	typeref:typename:float	access:public
+x	math/vector.h	/^    float x;$/;"	m	struct:__anon6e414ac70408	typeref:typename:float	access:public
+x	math/vector.h	/^    int x;$/;"	m	struct:__anon6e414ac70208	typeref:typename:int	access:public
+y	math/vector.h	/^    float y;$/;"	m	struct:__anon6e414ac70108	typeref:typename:float	access:public
+y	math/vector.h	/^    float y;$/;"	m	struct:__anon6e414ac70308	typeref:typename:float	access:public
+y	math/vector.h	/^    float y;$/;"	m	struct:__anon6e414ac70408	typeref:typename:float	access:public
+y	math/vector.h	/^    int y;$/;"	m	struct:__anon6e414ac70208	typeref:typename:int	access:public
+z	math/vector.h	/^    float z;$/;"	m	struct:__anon6e414ac70408	typeref:typename:float	access:public
+z	math/vector.h	/^    int z;$/;"	m	struct:__anon6e414ac70208	typeref:typename:int	access:public
