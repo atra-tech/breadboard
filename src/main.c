@@ -29,7 +29,7 @@ main(int argc, char **argv)
     
     while (running) {
         timerglobalupdate();
-        dt = timerglobaldiff();
+        dt = timerglobaldiff() * 0.001;
         
         atrastatehandle();
         atrastateupdate(dt);

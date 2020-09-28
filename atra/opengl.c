@@ -81,7 +81,7 @@ void
 windowsetvsync(Window *win, int vsync)
 {
     if (SDL_GL_SetSwapInterval(vsync) < 0) {
-        logprint(LOG_INFO, "window: Unable to change vsync state: " \
+        logprint(LOG_ERROR, "window: Unable to change vsync state: " \
                 "SDL error: $s", SDL_GetError());
     } else {
         win->vsync = vsync;

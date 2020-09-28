@@ -226,7 +226,7 @@ guihandle(Event *e)
         for (i = layerstack->size - 1; i >= 0; i--) {
             layer = listat(layerstack, i);
             base = layer->baseelem;
-            captured = guihandlemouse(base, e);
+            captured += guihandlemouse(base, e);
 
             if (captured > 0)
                 break;
@@ -238,7 +238,11 @@ guihandle(Event *e)
                e->type == SDL_TEXTINPUT) {
         if (kbdfocus) {
             guihandlekeyboard(kbdfocus, e);
+            captured += 1;
         }
+    }
+    if (kbdfocus) {
+        captured += 1;
     }
 
     return captured;
@@ -955,9 +959,11 @@ guihandlemouse(GUIElement *elem, Event *e)
                 elem->layer->dirty = 1;
             } else {
                 if (kbdfocus) {
-                    kbdfocus = NULL;
                     //elem->textgrid->dirty = 1;
-                    elem->layer->dirty = 1;
+                    kbdfocus->textgrid->cursor.ticks = 0;
+                    kbdfocus->textgrid->cursor.blink = 0;
+                    kbdfocus->layer->dirty = 1;
+                    kbdfocus = NULL;
                 }
             }
         } else if (e->type == SDL_MOUSEBUTTONUP) {
@@ -1039,7 +1045,13 @@ guihandlemouse(GUIElement *elem, Event *e)
     /* If event falls through, unset focuses */
     if (e->type == SDL_MOUSEBUTTONDOWN && !captured) {
         focus = NULL;
-        kbdfocus = NULL;
+
+        if (kbdfocus) {
+            kbdfocus->textgrid->cursor.ticks = 0;
+            kbdfocus->textgrid->cursor.blink = 0;
+            kbdfocus->layer->dirty = 1;
+            kbdfocus = NULL;
+        }
     }
 
     return captured;
@@ -1081,6 +1093,7 @@ guihandletextinput(GUIElement *elem, uchar chr)
 int
 guihandlekeyboard(GUIElement *elem, Event *e)
 {
+    int captured = 0;
     GUITextGrid *grid = elem->textgrid;
 
     if (kbdfocus) {
@@ -1138,8 +1151,8 @@ guihandlekeyboard(GUIElement *elem, Event *e)
             //grid->dirty = 1;
             grid->textset = 1;
             kbdfocus->layer->dirty = 1;
-            
         }
+        captured += 1;
     } else {
         if (e->type == SDL_KEYDOWN) {
             if (elem->callbacks[GUI_EVENT_KEYDOWN]) {
@@ -1150,9 +1163,9 @@ guihandlekeyboard(GUIElement *elem, Event *e)
                 elem->callbacks[GUI_EVENT_KEYUP](elem, keygetstates());
             }
         }
-        return 1;
+        //captured += 1;
     }
-    return 0;
+    return captured;
 }
 
 /* Sets new GUI focus, triggering appropriate callbacks in the process */

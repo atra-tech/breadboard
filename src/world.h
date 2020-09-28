@@ -22,22 +22,13 @@
 #define SEGMENT_COUNT       SEGMENTS_PER_ROW * SEGMENTS_PER_ROW
 #define LAYER_TILECOUNT     SEGMENT_SIZE * SEGMENT_SIZE
 #define VIEW_DIST           4
+#define TILE_WIREGAP        0.1f
 
 enum layer_type {
-    LAYER_PACK,
     LAYER_RED,
     LAYER_GREEN,
     LAYER_BLUE,
     LAYER_TOTAL
-};
-
-enum tile_section {
-    SIDE_CENTER,
-    SIDE_TOP,
-    SIDE_BOT,
-    SIDE_LEFT,
-    SIDE_RIGHT,
-    SIDE_TOTAL
 };
 
 enum tile_type {
@@ -47,8 +38,33 @@ enum tile_type {
     TILE_PIN
 };
 
+enum tile_state {
+    TILE_TOP     = BIT(0),
+    TILE_BOT     = BIT(1),
+    TILE_LEFT    = BIT(2),
+    TILE_RIGHT   = BIT(3),
+    TILE_CENTRE  = BIT(4),
+    TILE_POWERED = BIT(5)
+};
+
+enum wire_type {
+    WIRE_RED,
+    WIRE_GREEN,
+    WIRE_BLUE,
+    WIRE_NONE,
+    WIRE_TOTAL
+};
+
+enum mouse_mode {
+    MOUSE_NONE,
+    MOUSE_DRAW,
+    MOUSE_ERASE,
+    MOUSE_GRAB,
+    MOUSE_DRAGBOX
+};
+
 typedef struct Tile {
-    uint type[SIDE_TOTAL];
+    uint state;
 } Tile;
 
 typedef struct Layer {
@@ -56,10 +72,11 @@ typedef struct Layer {
 } Layer;
 
 typedef struct FreeSegment {
-    float x, y, w, h;
+    float x, y;
+    uint w, h;
     VBuffer vbo;
     mat4 modelmat;
-    Tile *tiles[LAYER_TOTAL];    //Size based on layer dimensions
+    Tile *tiles[LAYER_TOTAL];   //Size based on layer dimensions
     List *packs;
 } FreeSegment;
 
@@ -75,10 +92,16 @@ typedef struct World {
     Segment segs[SEGMENT_COUNT];
 } World;
 
+typedef struct SelectBox {
+    float x, y, w, h;
+    int enabled;
+} SelectBox;
+
 void worldinit(World *world);
 void worldhandle(World *world, Event *e);
 void worldupdate(World *world, float dt);
 void worldrender(World *world, Camera *cam);
+void worlddelete(World *world);
 
 void worldsave(const char *path);
 void worldload(const char *path);

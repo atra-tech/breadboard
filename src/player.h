@@ -17,10 +17,12 @@
 typedef struct Player {
     Entity ent;
     vec3 vel;
+    uint locked;
+    float speed;
 } Player;
 
 void playerinit(Player *player);
-void playerhandle(Event *e);
-void playerupdate(float dt);
+void playerhandle(Player *player, Event *e);
+void playerupdate(Player *player, float dt);
 
 #endif /* PLAYER_H */

@@ -17,16 +17,24 @@
 #include "player.h"
 #include "gui.h"
 
+#define INV_16            0.0625
+#define CAMERA_ZOOM_SPEED camera->zoom * INV_16
+#define CAMERA_MAX_ZOOM   512
+#define CAMERA_MIN_ZOOM   32
+
 static void simhandle(void);
 static void simupdate(float dt);
 static void simrender(void);
+static void createtestgui(void);
+static void zoomcamerain(void);
+static void zoomcameraout(void);
+static void handlescrollwheel(Event *e);
 
 static Camera *camera;
 static State *simstate;
 static World *world;
 static Player player;
 
-static void createtestgui();
 
 void
 simstateinit(void)
@@ -41,7 +49,6 @@ simstateinit(void)
 
     //TODO: Create world (or load from file)
     //
-    
     createtestgui();
 }
 
@@ -71,6 +78,7 @@ simhandle(void)
 
     if (guigetkbdfocus()) {
         SDL_StartTextInput();
+        player.locked = 1;
     }
 
     while (SDL_PollEvent(&e)) {
@@ -92,6 +100,11 @@ simhandle(void)
             redrawgui = 0;
         }
         guihandle(&e);
+        
+        if (!player.locked) {
+            playerhandle(&player, &e);
+            handlescrollwheel(&e);
+        }
         /*  TODO: handle player
          *  handle world if GUI falls through
          *  */
@@ -99,13 +112,14 @@ simhandle(void)
 
     if (!guigetkbdfocus()) {
         SDL_StopTextInput();
+        player.locked = 0;
     }
 }
 
 void
 simupdate(float dt)
 {
-    playerupdate(dt);
+    playerupdate(&player, dt);
     cameraupdate(camera);
 
     guiupdate(dt);
@@ -114,7 +128,7 @@ simupdate(float dt)
 void
 simrender(void)
 {
-    glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
+    glClearColor(0.784f, 0.761f, 0.725f, 1.0f);
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
 
     //worldrender(world, camera);
@@ -125,6 +139,40 @@ simrender(void)
     guirender();
 }
 
+void
+handlescrollwheel(Event *e)
+{
+    if (e->type == SDL_MOUSEWHEEL) {
+        if (e->wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
+            e->wheel.y *= -1;
+        }
+
+        if (e->wheel.y < 0) {
+            zoomcameraout();
+        } else if (e->wheel.y > 0) {
+            zoomcamerain();
+        }
+        cameracalcprojmatrix(camera, camera->width, camera->height);
+    }
+}
+
+void
+zoomcamerain(void) {
+    camera->zoom += CAMERA_ZOOM_SPEED;
+
+    if (camera->zoom > CAMERA_MAX_ZOOM) {
+        camera->zoom = CAMERA_MAX_ZOOM;
+    }
+}
+
+void
+zoomcameraout(void) {
+    camera->zoom -= CAMERA_ZOOM_SPEED;
+
+    if (camera->zoom < CAMERA_MIN_ZOOM) {
+        camera->zoom = CAMERA_MIN_ZOOM;
+    }
+}
 
 /*
  *  GUI TESTING
