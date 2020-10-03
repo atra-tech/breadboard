@@ -1,0 +1,1 @@
+x86_64-w64-mingw32-gcc -o win32/breadboard.exe -L./lib/ -L./lib/backup/ -L./win32/ -I./include/ -I./vendor/cglm/include/ -I./atra -I./atra/util/ -O3 -Wall -Wextra -Wpedantic -std=c99 -pthread src/*.c atra/*.c atra/util/*.c -lmingw32 -lm -lSDL2 -lSDL2main -lSDL2_image -lopengl32 -lglew32
