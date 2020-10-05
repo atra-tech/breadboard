@@ -1,6 +1,7 @@
 #version 330
 
 in vec2 uvout;
+in vec3 wirecolor;
 
 out vec4 Color;
 
@@ -11,5 +12,6 @@ uniform mat4 modelmat;
 void main()
 {
     vec4 matdiffuse = texture2D(albedo_map, uvout).rgba;
-    Color = matdiffuse;
+
+    Color = vec4(matdiffuse.rgb * wirecolor, matdiffuse.a);
 }

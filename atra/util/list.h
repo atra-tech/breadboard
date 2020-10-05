@@ -53,14 +53,14 @@ void listdelete(List *list);
 
 void veclistinit(VecList *list, size_t elemsize);
 float * veclistat(VecList *list, uint index);
-void veclistpush(VecList *list, float *vec);
+void veclistpush(VecList *list, const float *vec);
 void veclistgrow(VecList *list);
 void veclistclear(VecList *list);
 void veclistdelete(VecList *list);
 
 void iveclistinit(IVecList *list, size_t elemsize);
 int * iveclistat(IVecList *list, uint index);
-void iveclistpush(IVecList *list, int *vec);
+void iveclistpush(IVecList *list, const int *vec);
 void iveclistgrow(IVecList *list);
 void iveclistclear(IVecList *list);
 void iveclistdelete(IVecList *list);

@@ -99,11 +99,15 @@ simhandle(void)
             guiredraw();
             redrawgui = 0;
         }
-        guihandle(&e);
+        
+        if(!guihandle(&e))
+        {
         
         if (!player.locked) {
             playerhandle(&player, &e);
+            worldhandle(world, &e);
             handlescrollwheel(&e);
+        }
         }
         /*  TODO: handle player
          *  handle world if GUI falls through
@@ -219,7 +223,7 @@ createtestgui(void)
             "res/shader/guifrag.glsl",
             "res/texture/gui.png");
 
-    elem[0] = guielemcreate(0.2f, 0.2f, 0.4f, 0.4f,
+    elem[0] = guielemcreate(0.10f, 0.10f, 0.25f, 0.25f,
             GUI_CUSTOM, 
             GUI_ATTR_MOVABLE |
             GUI_ATTR_HASTEXTURE |
@@ -270,7 +274,7 @@ createtestgui(void)
     guitextscrollenable(elem[2]);
     
     guitextgridadd(guitextgridcreate(8, 8, 0, 2), elem[2]);
-    guisetgridtext(elem[2], "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.");
+    guisetgridtext(elem[2], "Example text.");
     //guisetgridtext(elem[2]->textgrid, "Data *\ngetData(&frame)\n{\n\treturn frame->data;\n}");
     //guisetgridtext(elem[2]->textgrid, "Data * getData(&frame) { return frame->data; }");
     //guisetgridtext(elem[2]->textgrid, "0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18");

@@ -272,7 +272,7 @@ veclistat(VecList *list, uint index)
 }
 
 void
-veclistpush(VecList *list, float *vec)
+veclistpush(VecList *list, const float *vec)
 {
     if (list->size >= list->cap) {
         veclistgrow(list);
@@ -326,7 +326,7 @@ iveclistat(IVecList *list, uint index)
 }
 
 void
-iveclistpush(IVecList *list, int *vec)
+iveclistpush(IVecList *list, const int *vec)
 {
     if (list->size >= list->cap) {
         iveclistgrow(list);

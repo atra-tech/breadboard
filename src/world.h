@@ -22,7 +22,8 @@
 #define SEGMENT_COUNT       SEGMENTS_PER_ROW * SEGMENTS_PER_ROW
 #define LAYER_TILECOUNT     SEGMENT_SIZE * SEGMENT_SIZE
 #define VIEW_DIST           4
-#define TILE_WIREGAP        0.1f
+#define TILE_WIREGAP        0.2f
+#define WIRE_PERM_COUNT     16
 
 enum layer_type {
     LAYER_RED,
@@ -75,6 +76,7 @@ typedef struct FreeSegment {
     float x, y;
     uint w, h;
     VBuffer vbo;
+    VecList colors;
     mat4 modelmat;
     Tile *tiles[LAYER_TOTAL];   //Size based on layer dimensions
     List *packs;
@@ -83,13 +85,15 @@ typedef struct FreeSegment {
 typedef struct Segment {
     int x, y, dirty;
     VBuffer vbo;
+    VBuffer wirevbo;
+    VecList colors;
     mat4 modelmat;
     Layer layers[LAYER_TOTAL];
     List *packs;
 } Segment;
 
 typedef struct World {
-    Segment segs[SEGMENT_COUNT];
+    Segment *segs[SEGMENT_COUNT];
 } World;
 
 typedef struct SelectBox {
