@@ -3,9 +3,9 @@
 ## Dependencies
 
 * OpenGL 3.3 compatible graphics card and driver
-* SDL2 2.0.12
-* SDL2\_image 2.0.5
-* GLEW 2.2.0
+* SDL2
+* SDL2\_image
+* GLEW
 
 ## Compiling
 
