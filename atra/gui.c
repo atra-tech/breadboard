@@ -521,13 +521,13 @@ guimesh(GUIElement *elem)
     uint i, totalrows;
     GUILayer *layer = elem->layer;
     GUIElement *parent = elem->parent;
+    GUIElement *next, *rel_elem;
     GUITextGrid *grid = elem->textgrid;
     VBuffer *vbo = &layer->vbo;
     List *agenda;
     int x_min, y_min, x_max, y_max, depth;
-    int rel_x, rel_y, mod_x, mod_y;
+    float rel_x, rel_y, rel_w, rel_h, mod_x, mod_y;
 
-    rel_x = 0; rel_y = 0;
     mod_x = guicam.width;
     mod_y = guicam.height;
 
@@ -544,13 +544,28 @@ guimesh(GUIElement *elem)
 
     while (agenda->size > 0) {
         elem = listat(agenda, 0);
-        
-        if (elem->parent != parent) {
+       
+        // If parent of elem is different, check the parent of the parent
+
+        /*if (elem->parent != parent) {
             parent = elem->parent;
             rel_x += parent->x * mod_x;
             rel_y += parent->y * mod_y;
             mod_x *= parent->w;
             mod_y *= parent->h;
+        }*/
+        rel_elem = elem;
+        next = elem->parent;
+        rel_x = 0; rel_y = 0;
+        rel_w = 1; rel_h = 1;
+
+        while (next) {
+            rel_x = (rel_x + rel_elem->x) * next->w;
+            rel_y = (rel_y + rel_elem->y) * next->h;
+            rel_w *= rel_elem->w;
+            rel_h *= rel_elem->h;
+            rel_elem = next;
+            next = rel_elem->parent;
         }
 
         if (elem->children->size > 0) {
@@ -559,10 +574,14 @@ guimesh(GUIElement *elem)
             }
         }
         if (!(elem->state & GUI_STATE_INVISIBLE)) {
-            x_min = rel_x + elem->x * mod_x;
-            y_min = rel_y + elem->y * mod_y;
-            x_max = x_min + elem->w * mod_x;
-            y_max = y_min + elem->h * mod_y;
+            //x_min = rel_x + elem->x * mod_x;
+            //y_min = rel_y + elem->y * mod_y;
+            //x_max = x_min + elem->w * mod_x;
+            //y_max = y_min + elem->h * mod_y;
+            x_min = (rel_x + rel_elem->x) * guicam.width;
+            y_min = (rel_y + rel_elem->y) * guicam.height;
+            x_max = x_min + rel_w * (rel_elem->w * guicam.width);
+            y_max = y_min + rel_h * (rel_elem->h * guicam.height);
 
             if (elem->attr & GUI_ATTR_HASTEXTURE) {
                 guipushquad(vbo, x_min, y_min, x_max, y_max,
@@ -897,7 +916,8 @@ guihandlemouse(GUIElement *elem, Event *e)
 
                 if (guimouseintersects(child, mx, my) &&
                     !(child->state & GUI_STATE_INVISIBLE) &&
-                    !(child->state & GUI_STATE_DISABLED)) {
+                    !(child->state & GUI_STATE_DISABLED) &&
+                    !(child->attr  & GUI_ATTR_NOCAPTURE)) {
                     elem = child;
                     captured++;
                     goto sectstart;
