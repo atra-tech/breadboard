@@ -12,6 +12,7 @@
 #include "world.h"
 #include "input.h"
 #include "core.h"
+#include "gui.h"
 #include "util/log.h"
 
 #define COPY_VEC(dst, src, row, size) \
@@ -32,6 +33,9 @@ static void tilehandlemouse(Tile *tile, float mx, float my);
 static void layermesh(Segment *seg, Layer *layer, const float *color, uint depth);
 static void layerrender(Layer *layer, uint type);
 static void wirecalcuvs(void);
+static void wiremovetotop(uint wire);
+static void guitoolbarcreate(void);
+static void fullremesh(void);
 
 /*  
  *  VERTEX DATA
@@ -89,14 +93,17 @@ static float wireuvs[WIRE_PERM_COUNT][8];
 static const float colorred[]   = {1.0f, 0.2f, 0.2f};
 static const float colorgreen[] = {0.4f, 1.0f, 0.2f};
 static const float colorblue[]  = {0.2f, 0.4f, 1.0f};
+static const float *colors[] = {colorred, colorgreen, colorblue};
 
 static int init = 0;
+static World *mainworld;
 static Shader worldshader;
 static Shader bgshader;
 static Texture circuittex;
 static Texture bgtex;
 static uint currentwire;
 static uint mousemode;
+static uint wireorder[3];
 
 void
 worldstart(void)
@@ -114,12 +121,13 @@ worldstart(void)
     circuittex.texsize = 64;
     wirecalcuvs();
 
-    currentwire = WIRE_BLUE;
+    currentwire = WIRE_NONE;
     mousemode = MOUSE_NONE;
-    //selectioninit();
+    wireorder[0] = WIRE_RED;
+    wireorder[1] = WIRE_GREEN;
+    wireorder[2] = WIRE_BLUE;
     
-    /* Calculate wire UVs */
-
+    guitoolbarcreate();
 }
 
 void
@@ -140,6 +148,7 @@ worldinit(World *world)
             world->segs[i * SEGMENTS_PER_ROW + j] = seg;
         }
     }
+    mainworld = world;
 }
 
 void
@@ -447,6 +456,7 @@ worldrender(World *world, Camera *cam)
 void
 layerrender(Layer *layer, uint type)
 {
+
 }
 
 void
@@ -467,7 +477,7 @@ void
 segmentmesh(Segment *seg)
 {
     uint i, idxcount;
-    vec3 vert, norm, color;
+    vec3 vert, norm;
     vec2 uv;
     ivec3 index;
 
@@ -490,12 +500,11 @@ segmentmesh(Segment *seg)
     idxcount += 4;
     seg->vbo.indxcount += 12;
 
-    /* TODO: Take layer ordering visibility into account */
-    layermesh(seg, &seg->layers[LAYER_RED], colorred, 1);
-    layermesh(seg, &seg->layers[LAYER_GREEN], colorgreen, 2);
-    layermesh(seg, &seg->layers[LAYER_BLUE], colorblue, 3);
+    layermesh(seg, &seg->layers[wireorder[2]], colors[wireorder[2]], 1);
+    layermesh(seg, &seg->layers[wireorder[1]], colors[wireorder[1]], 2);
+    layermesh(seg, &seg->layers[wireorder[0]], colors[wireorder[0]], 3);
 
-    /* Render ICs */
+    /* TODO: Render ICs */
     
     vbufbind(&seg->vbo);
     vbufbind(&seg->wirevbo);
@@ -564,6 +573,16 @@ freesegmesh(FreeSegment *seg)
 }
 
 void
+fullremesh(void)
+{
+    uint i;
+
+    for (i = 0; i < SEGMENT_COUNT; i++) {
+        mainworld->segs[i]->dirty = 1;
+    }
+}
+
+void
 wirecalcuvs(void)
 {
     uint i;
@@ -573,6 +592,20 @@ wirecalcuvs(void)
                 wiretexcoords[i][0],
                 wiretexcoords[i][1],
                 wireuvs[i]);
+    }
+}
+
+/* Moves the selected wire type to the top of the rendering queue */
+void
+wiremovetotop(uint wire)
+{
+    if (wireorder[1] == wire) {
+        wireorder[1] = wireorder[0];
+        wireorder[0] = wire;
+    } else if (wireorder[2] == wire) {
+        wireorder[2] = wireorder[1];
+        wireorder[1] = wireorder[0];
+        wireorder[0] = wire;
     }
 }
 
@@ -620,4 +653,390 @@ Tile *
 segmentgettile(Segment *seg, uint x, uint y, uint layer)
 {
     return &seg->layers[layer].tiles[y + x * SEGMENT_SIZE];
+}
+
+
+/*
+ *  GUI DEFINITIONS
+ *
+ *  Here be dragons
+ */
+
+static void guibuttonmouseover(GUIElement *elem, ...);
+static void guibuttonmouseleave(GUIElement *elem, ...);
+static void guibuttonmouseup(GUIElement *elem, ...);
+
+static void guibuttonnotdown(GUIElement *elem, ...);
+static void guibuttonordown(GUIElement *elem, ...);
+static void guibuttonanddown(GUIElement *elem, ...);
+static void guibuttonxordown(GUIElement *elem, ...);
+
+static void guibuttonreddown(GUIElement *elem, ...);
+static void guibuttongreendown(GUIElement *elem, ...);
+static void guibuttonbluedown(GUIElement *elem, ...);
+
+static void guibuttonredup(GUIElement *elem, ...);
+static void guibuttongreenup(GUIElement *elem, ...);
+static void guibuttonblueup(GUIElement *elem, ...);
+
+static void guibuttonredmouseleave(GUIElement *elem, ...);
+static void guibuttongreenmouseleave(GUIElement *elem, ...);
+static void guibuttonbluemouseleave(GUIElement *elem, ...);
+
+enum gui_toolbar_buttons {
+    BUTTON_NOT,
+    BUTTON_OR,
+    BUTTON_AND,
+    BUTTON_XOR,
+    BUTTON_RED,
+    BUTTON_GREEN,
+    BUTTON_BLUE,
+    BUTTON_TOTAL
+};
+
+void
+guibuttonmouseover(GUIElement *elem, ...)
+{
+    guisetbacktexture(elem, 320, 0, 64, 64);
+    elem->layer->dirty = 1;
+}
+
+void
+guibuttonmouseleave(GUIElement *elem, ...)
+{
+    guisetbacktexture(elem, 256, 0, 64, 64);
+    elem->layer->dirty = 1;
+}
+
+void
+guibuttonmouseup(GUIElement *elem, ...)
+{
+    if (elem->state & GUI_STATE_MOUSEOVER) {
+        guisetbacktexture(elem, 320, 0, 64, 64);
+    } else {
+        guisetbacktexture(elem, 256, 0, 64, 64);
+    }
+    elem->layer->dirty = 1;
+}
+
+void
+guibuttonnotdown(GUIElement *elem, ...)
+{
+    guisetbacktexture(elem, 384, 0, 64, 64);
+    elem->layer->dirty = 1;
+}
+
+void
+guibuttonordown(GUIElement *elem, ...)
+{
+    guisetbacktexture(elem, 384, 0, 64, 64);
+    elem->layer->dirty = 1;
+}
+
+void
+guibuttonanddown(GUIElement *elem, ...)
+{
+    guisetbacktexture(elem, 384, 0, 64, 64);
+    elem->layer->dirty = 1;
+}
+
+void
+guibuttonxordown(GUIElement *elem, ...)
+{
+    guisetbacktexture(elem, 384, 0, 64, 64);
+    elem->layer->dirty = 1;
+}
+
+void
+guibuttonreddown(GUIElement *elem, ...)
+{
+    GUIElement *green, *blue;
+
+    green = guigetelem("toolbar_green");
+    blue = guigetelem("toolbar_blue");
+    
+    if (currentwire == WIRE_RED) {
+        currentwire = WIRE_NONE;
+        guisetbacktexture(elem, 384, 0, 64, 64);
+    } else {
+        currentwire = WIRE_RED;
+        wiremovetotop(WIRE_RED);
+        fullremesh();
+        guisetbacktexture(elem, 384, 0, 64, 64);
+        guisetbacktexture(green, 256, 0, 64, 64);
+        guisetbacktexture(blue, 256, 0, 64, 64);
+    }
+    elem->layer->dirty = 1;
+}
+
+void
+guibuttongreendown(GUIElement *elem, ...)
+{
+    GUIElement *red, *blue;
+
+    red = guigetelem("toolbar_red");
+    blue = guigetelem("toolbar_blue");
+
+    if (currentwire == WIRE_GREEN) {
+        currentwire = WIRE_NONE;
+        guisetbacktexture(elem, 384, 0, 64, 64);
+    } else {
+        currentwire = WIRE_GREEN;
+        wiremovetotop(WIRE_GREEN);
+        fullremesh();
+        guisetbacktexture(elem, 384, 0, 64, 64);
+        guisetbacktexture(red, 256, 0, 64, 64);
+        guisetbacktexture(blue, 256, 0, 64, 64);
+    }
+    elem->layer->dirty = 1;
+}
+
+void
+guibuttonbluedown(GUIElement *elem, ...)
+{
+    GUIElement *red, *green;
+
+    red = guigetelem("toolbar_red");
+    green = guigetelem("toolbar_green");
+
+    if (currentwire == WIRE_BLUE) {
+        currentwire = WIRE_NONE;
+        guisetbacktexture(elem, 384, 0, 64, 64);
+    } else {
+        currentwire = WIRE_BLUE;
+        wiremovetotop(WIRE_BLUE);
+        fullremesh();
+        guisetbacktexture(elem, 384, 0, 64, 64);
+        guisetbacktexture(red, 256, 0, 64, 64);
+        guisetbacktexture(green, 256, 0, 64, 64);
+    }
+    elem->layer->dirty = 1;
+}
+
+void 
+guibuttonredup(GUIElement *elem, ...)
+{
+    if (currentwire == WIRE_RED) {
+        guisetbacktexture(elem, 320, 0, 64, 64);
+    } else {
+        if (elem->state & GUI_STATE_MOUSEOVER) {
+            guisetbacktexture(elem, 320, 0, 64, 64);
+        } else {
+            guisetbacktexture(elem, 256, 0, 64, 64);
+        }
+    }
+    elem->layer->dirty = 1;
+}
+
+void
+guibuttongreenup(GUIElement *elem, ...)
+{
+    if (currentwire == WIRE_GREEN) {
+        guisetbacktexture(elem, 320, 0, 64, 64);
+    } else {
+        if (elem->state & GUI_STATE_MOUSEOVER) {
+            guisetbacktexture(elem, 320, 0, 64, 64);
+        } else {
+            guisetbacktexture(elem, 256, 0, 64, 64);
+        }
+    }
+    elem->layer->dirty = 1;
+}
+
+void
+guibuttonblueup(GUIElement *elem, ...)
+{
+    if (currentwire == WIRE_BLUE) {
+        guisetbacktexture(elem, 320, 0, 64, 64);
+    } else {
+        if (elem->state & GUI_STATE_MOUSEOVER) {
+            guisetbacktexture(elem, 320, 0, 64, 64);
+        } else {
+            guisetbacktexture(elem, 256, 0, 64, 64);
+        }
+    }
+    elem->layer->dirty = 1;
+}
+
+void
+guibuttonredmouseleave(GUIElement *elem, ...)
+{
+    if (currentwire == WIRE_RED) {
+        guisetbacktexture(elem, 320, 0, 64, 64);
+    } else {
+        guisetbacktexture(elem, 256, 0, 64, 64);
+    }
+    elem->layer->dirty = 1;
+}
+
+void
+guibuttongreenmouseleave(GUIElement *elem, ...)
+{
+    if (currentwire == WIRE_GREEN) {
+        guisetbacktexture(elem, 320, 0, 64, 64);
+    } else {
+        guisetbacktexture(elem, 256, 0, 64, 64);
+    }
+    elem->layer->dirty = 1;
+}
+
+void
+guibuttonbluemouseleave(GUIElement *elem, ...)
+{
+    if (currentwire == WIRE_BLUE) {
+        guisetbacktexture(elem, 320, 0, 64, 64);
+    } else {
+        guisetbacktexture(elem, 256, 0, 64, 64);
+    }
+    elem->layer->dirty = 1;
+}
+
+void
+guitoolbarcreate(void) 
+{
+    uint i;
+    GUILayer *layer;
+    GUIElement *base;
+    GUIElement *buttons[BUTTON_TOTAL];
+    GUIElement *icons[BUTTON_TOTAL];
+
+    layer = guilayercreate("res/shader/guivert.glsl",
+            "res/shader/guifrag.glsl",
+            "res/texture/gui.png");
+
+    base = guielemcreate(0.325f, 0.0f, 0.35f, 0.1f,
+            GUI_CUSTOM, GUI_ATTR_HASTEXTURE, "toolbar_base");
+
+    buttons[BUTTON_NOT] = guielemcreate(0.0f, 0.0f, 0.14285f, 1.0f,
+            GUI_CUSTOM,
+            GUI_ATTR_HASTEXTURE |
+            GUI_ATTR_CLICKABLE,
+            "toolbar_not");
+    
+    buttons[BUTTON_OR] = guielemcreate(0.14285f, 0.0f, 0.14285f, 1.0f,
+            GUI_CUSTOM,
+            GUI_ATTR_HASTEXTURE |
+            GUI_ATTR_CLICKABLE,
+            "toolbar_or");
+
+    buttons[BUTTON_AND] = guielemcreate(0.28571f, 0.0f, 0.14285f, 1.0f,
+            GUI_CUSTOM,
+            GUI_ATTR_HASTEXTURE |
+            GUI_ATTR_CLICKABLE,
+            "toolbar_and");
+
+    buttons[BUTTON_XOR] = guielemcreate(0.42857f, 0.0f, 0.14285f, 1.0f,
+            GUI_CUSTOM,
+            GUI_ATTR_HASTEXTURE |
+            GUI_ATTR_CLICKABLE,
+            "toolbar_xor");
+
+    buttons[BUTTON_RED] = guielemcreate(0.57143f, 0.0f, 0.14285f, 1.0f,
+            GUI_CUSTOM,
+            GUI_ATTR_HASTEXTURE |
+            GUI_ATTR_CLICKABLE,
+            "toolbar_red");
+
+    buttons[BUTTON_GREEN] = guielemcreate(0.71428f, 0.0f, 0.14285f, 1.0f,
+            GUI_CUSTOM,
+            GUI_ATTR_HASTEXTURE |
+            GUI_ATTR_CLICKABLE,
+            "toolbar_green");
+    
+    buttons[BUTTON_BLUE] = guielemcreate(0.85714f, 0.0f, 0.14285f, 1.0f,
+            GUI_CUSTOM,
+            GUI_ATTR_HASTEXTURE |
+            GUI_ATTR_CLICKABLE,
+            "toolbar_blue");
+    
+    icons[BUTTON_NOT] = guielemcreate(0.1f, 0.1f, 0.8f, 0.8f,
+            GUI_CUSTOM,
+            GUI_ATTR_HASTEXTURE |
+            GUI_ATTR_NOCAPTURE,
+            "toolbar_not_icon");
+    
+    icons[BUTTON_OR] = guielemcreate(0.1f, 0.1f, 0.8f, 0.8f,
+            GUI_CUSTOM,
+            GUI_ATTR_HASTEXTURE |
+            GUI_ATTR_NOCAPTURE,
+            "toolbar_or_icon");
+
+    icons[BUTTON_AND] = guielemcreate(0.1f, 0.1f, 0.8f, 0.8f,
+            GUI_CUSTOM,
+            GUI_ATTR_HASTEXTURE |
+            GUI_ATTR_NOCAPTURE,
+            "toolbar_and_icon");
+
+    icons[BUTTON_XOR] = guielemcreate(0.1f, 0.1f, 0.8f, 0.8f,
+            GUI_CUSTOM,
+            GUI_ATTR_HASTEXTURE |
+            GUI_ATTR_NOCAPTURE,
+            "toolbar_xor_icon");
+
+    icons[BUTTON_RED] = guielemcreate(0.1f, 0.1f, 0.8f, 0.8f,
+            GUI_CUSTOM,
+            GUI_ATTR_HASTEXTURE |
+            GUI_ATTR_NOCAPTURE,
+            "toolbar_red_icon");
+
+    icons[BUTTON_GREEN] = guielemcreate(0.1f, 0.1f, 0.8f, 0.8f,
+            GUI_CUSTOM,
+            GUI_ATTR_HASTEXTURE |
+            GUI_ATTR_NOCAPTURE,
+            "toolbar_blue_icon");
+    
+    icons[BUTTON_BLUE] = guielemcreate(0.1f, 0.1f, 0.8f, 0.8f,
+            GUI_CUSTOM,
+            GUI_ATTR_HASTEXTURE |
+            GUI_ATTR_NOCAPTURE,
+            "toolbar_green_icon");
+
+    guilinklayer(base, layer);
+    guiaddelem(base, buttons[BUTTON_NOT]);
+    guiaddelem(base, buttons[BUTTON_OR]);
+    guiaddelem(base, buttons[BUTTON_AND]);
+    guiaddelem(base, buttons[BUTTON_XOR]);
+    guiaddelem(base, buttons[BUTTON_RED]);
+    guiaddelem(base, buttons[BUTTON_GREEN]);
+    guiaddelem(base, buttons[BUTTON_BLUE]);
+
+    guisetbacktexture(base, 256, 0, 1, 1);
+
+    for (i = 0; i < BUTTON_TOTAL; i++) {
+        guiaddelem(buttons[i], icons[i]);
+        guisetbacktexture(buttons[i], 256, 0, 64, 64);
+        guiseteventcallback(buttons[i], GUI_EVENT_MOUSEOVER, guibuttonmouseover);
+    }
+    guisetbacktexture(icons[BUTTON_NOT], 256, 64, 128, 128);
+    guisetbacktexture(icons[BUTTON_OR], 384, 64, 128, 128);
+    guisetbacktexture(icons[BUTTON_AND], 512, 64, 128, 128);
+    guisetbacktexture(icons[BUTTON_XOR], 640, 64, 128, 128);
+    guisetbacktexture(icons[BUTTON_RED], 256, 192, 128, 128);
+    guisetbacktexture(icons[BUTTON_GREEN], 384, 192, 128, 128);
+    guisetbacktexture(icons[BUTTON_BLUE], 512, 192, 128, 128);
+
+    guiseteventcallback(buttons[BUTTON_NOT], GUI_EVENT_MOUSEDOWN, guibuttonnotdown);
+    guiseteventcallback(buttons[BUTTON_OR], GUI_EVENT_MOUSEDOWN, guibuttonordown);
+    guiseteventcallback(buttons[BUTTON_AND], GUI_EVENT_MOUSEDOWN, guibuttonanddown);
+    guiseteventcallback(buttons[BUTTON_XOR], GUI_EVENT_MOUSEDOWN, guibuttonxordown);
+    guiseteventcallback(buttons[BUTTON_NOT], GUI_EVENT_MOUSEUP, guibuttonmouseup);
+    guiseteventcallback(buttons[BUTTON_OR], GUI_EVENT_MOUSEUP, guibuttonmouseup);
+    guiseteventcallback(buttons[BUTTON_AND], GUI_EVENT_MOUSEUP, guibuttonmouseup);
+    guiseteventcallback(buttons[BUTTON_XOR], GUI_EVENT_MOUSEUP, guibuttonmouseup);
+    guiseteventcallback(buttons[BUTTON_NOT], GUI_EVENT_MOUSELEAVE, guibuttonmouseleave);
+    guiseteventcallback(buttons[BUTTON_OR], GUI_EVENT_MOUSELEAVE, guibuttonmouseleave);
+    guiseteventcallback(buttons[BUTTON_AND], GUI_EVENT_MOUSELEAVE, guibuttonmouseleave);
+    guiseteventcallback(buttons[BUTTON_XOR], GUI_EVENT_MOUSELEAVE, guibuttonmouseleave);
+
+    guiseteventcallback(buttons[BUTTON_RED], GUI_EVENT_MOUSEDOWN, guibuttonreddown);
+    guiseteventcallback(buttons[BUTTON_RED], GUI_EVENT_MOUSEUP, guibuttonredup);
+    guiseteventcallback(buttons[BUTTON_RED], GUI_EVENT_MOUSELEAVE, guibuttonredmouseleave);
+
+    guiseteventcallback(buttons[BUTTON_GREEN], GUI_EVENT_MOUSEDOWN, guibuttongreendown);
+    guiseteventcallback(buttons[BUTTON_GREEN], GUI_EVENT_MOUSEUP, guibuttongreenup);
+    guiseteventcallback(buttons[BUTTON_GREEN], GUI_EVENT_MOUSELEAVE, guibuttongreenmouseleave);
+
+    guiseteventcallback(buttons[BUTTON_BLUE], GUI_EVENT_MOUSEDOWN, guibuttonbluedown);
+    guiseteventcallback(buttons[BUTTON_BLUE], GUI_EVENT_MOUSEUP, guibuttonblueup);
+    guiseteventcallback(buttons[BUTTON_BLUE], GUI_EVENT_MOUSELEAVE, guibuttonbluemouseleave);
 }

@@ -49,7 +49,6 @@ simstateinit(void)
 
     //TODO: Create world (or load from file)
     //
-    createtestgui();
 }
 
 void
@@ -275,9 +274,6 @@ createtestgui(void)
     
     guitextgridadd(guitextgridcreate(8, 8, 0, 2), elem[2]);
     guisetgridtext(elem[2], "Example text.");
-    //guisetgridtext(elem[2]->textgrid, "Data *\ngetData(&frame)\n{\n\treturn frame->data;\n}");
-    //guisetgridtext(elem[2]->textgrid, "Data * getData(&frame) { return frame->data; }");
-    //guisetgridtext(elem[2]->textgrid, "0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18");
 
     guisetbordersize(elem[0], 16);
     guisetbordersize(elem[1], 8);
@@ -287,7 +283,7 @@ createtestgui(void)
     guiaddelem(elem[0], elem[2]);
     guiaddelem(elem[1], elem[3]);
     guiaddelem(elem[1], elem[4]);
-    guiaddelem(elem[1], elem[5]);
+    guiaddelem(elem[2], elem[5]);
 
     guisetbacktexture(elem[0], 0, 8, 128, 128);
     guisetcornertexture(elem[0], 8, 0, 8, 8);

@@ -155,7 +155,7 @@ htableadd(HTable *table, void *key, void *val)
         if (!keys[i]) {
             keys[i] = key;
             vals[i] = val;
-            logprint(LOG_INFO, "HTable: Added Elem: Key=\"$s\"", (char *)key);
+            //logprint(LOG_INFO, "HTable: Added Elem: Key=\"$s\"", (char *)key);
             break;
         } else {
             if (table->equal(key, keys[i]))
