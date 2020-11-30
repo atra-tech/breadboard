@@ -5,7 +5,7 @@
  *
  *  Description:
  *  Structures for managing the grid-based world, and the visual
- *  representation of entities the user will built circuits with.
+ *  representation of entities the user will build circuits with.
  *
  *  */
 
@@ -13,7 +13,9 @@
 #include "input.h"
 #include "core.h"
 #include "gui.h"
+#include "file.h"
 #include "util/log.h"
+#include "util/stack.h"
 
 #define COPY_VEC(dst, src, row, size) \
     memcpy(dst, src + row * size, size * sizeof(float))
@@ -23,6 +25,7 @@
     dst[2] = icount + i3
 
 static void worldstart(void);
+static void worldshutdown(void);
 static void segmentinit(Segment *seg, uint x, uint y);
 static void segmentdelete(Segment *seg);
 static void segmentmesh(Segment *seg);
@@ -31,11 +34,12 @@ static void freesegdelete(FreeSegment *seg);
 static void freesegmesh(FreeSegment *seg);
 static void tilehandlemouse(Tile *tile, float mx, float my);
 static void layermesh(Segment *seg, Layer *layer, const float *color, uint depth);
-static void layerrender(Layer *layer, uint type);
 static void wirecalcuvs(void);
 static void wiremovetotop(uint wire);
 static void guitoolbarcreate(void);
 static void fullremesh(void);
+static void drawtext(VBuffer *vbo, const char *text,
+        float x_min, float x_max, float y_min, float y_max);
 
 /*  
  *  VERTEX DATA
@@ -96,18 +100,24 @@ static const float colorblue[]  = {0.2f, 0.4f, 1.0f};
 static const float *colors[] = {colorred, colorgreen, colorblue};
 
 static int init = 0;
+static Stack *worldstack;
 static World *mainworld;
 static Shader worldshader;
 static Shader bgshader;
 static Texture circuittex;
 static Texture bgtex;
+static FontTex fonttex;
 static uint currentwire;
 static uint mousemode;
 static uint wireorder[3];
+static float packuvs[PACKTEX_TOTAL * 8];
+static float pinuvs[PINTEX_TOTAL * 8];
 
 void
 worldstart(void)
 {
+    uint i, j;
+
     shaderinit(&worldshader,
             "res/shader/worldvert.glsl",
             "res/shader/worldfrag.glsl");
@@ -116,18 +126,39 @@ worldstart(void)
             "res/shader/bgfrag.glsl");
     texfind(&bgtex, "res/texture/background_small.png");
     texfind(&circuittex, "res/texture/circuits.png");
+    fontfind(&fonttex, "res/font/maledict_final.png", 8, 8);
 
     circuittex.imagesize = 1024;
     circuittex.texsize = 64;
     wirecalcuvs();
+    fontcalctexcoords(&fonttex, 255);
 
     currentwire = WIRE_NONE;
     mousemode = MOUSE_NONE;
     wireorder[0] = WIRE_RED;
     wireorder[1] = WIRE_GREEN;
     wireorder[2] = WIRE_BLUE;
+
+    /* Populate circuit package texture UVs */
+    for (i = 0; i < 3; i++) {
+        for (j = 0; j < 3; j++) {
+            texget(&circuittex, j, i, packuvs + (j + i * 3) * 8);
+        }
+    }
+
+    /* Populate pin package texture UVs */
+    for (i = 0; i < PINTEX_TOTAL; i++) {
+        texget(&circuittex, i, 3, pinuvs + i * 8);
+    }
     
+    filesysinit();
     guitoolbarcreate();
+}
+
+void
+worldshutdown(void)
+{
+    filesysshutdown();
 }
 
 void
@@ -148,7 +179,23 @@ worldinit(World *world)
             world->segs[i * SEGMENTS_PER_ROW + j] = seg;
         }
     }
+    worldstack = stackcreate();
+    worldpush(world);
+}
+
+void
+worldpush(World *world)
+{
+    stackpush(worldstack, world);
     mainworld = world;
+}
+
+void
+worldpop(void)
+{
+    worlddelete(stacktop(worldstack));
+    stackpop(worldstack);
+    mainworld = stacktop(worldstack);
 }
 
 void
@@ -164,6 +211,7 @@ worlddelete(World *world)
             free(seg);
         }
     }
+    //stackdelete(worldstack);
 }
 
 void
@@ -252,6 +300,7 @@ worldhandle(World *world, Event *e)
      *          FreeSegment selection will rebind the contained elements to
      *          the world and delete it. */
     
+
     if (e->type == SDL_MOUSEBUTTONDOWN) {
         if (e->button.button == SDL_BUTTON_LEFT) {
             //  Possible paths:
@@ -293,6 +342,14 @@ worldhandle(World *world, Event *e)
             }
         }
     }
+
+    if (!(mstate & MOUSE_BUTTON(LEFT)) && mousemode == MOUSE_DRAW) {
+        mousemode = MOUSE_NONE;
+    } else if (!(mstate & MOUSE_BUTTON(RIGHT)) && mousemode == MOUSE_ERASE) {
+        mousemode = MOUSE_NONE;
+    }
+    
+
 
     /*if (mousemode == MOUSE_DRAG) {
         diff_mx = mx - prev_mx;
@@ -405,9 +462,10 @@ worldrender(World *world, Camera *cam)
     shaderloadviewmat(&bgshader, cam->viewmat);
     shaderaddint(&bgshader, "albedo_map", 0);
 
-    glEnable(GL_DEPTH_TEST);
+    //glEnable(GL_DEPTH_TEST);
     //glEnable(GL_CULL_FACE);
     glDisable(GL_CULL_FACE);
+    glDisable(GL_DEPTH_TEST);
 
     /* TODO: Change segment render distance to be based on camera zoom */
     for (i = seg_x - VIEW_DIST; i <= seg_x + VIEW_DIST; i++) {
@@ -454,12 +512,6 @@ worldrender(World *world, Camera *cam)
 }
 
 void
-layerrender(Layer *layer, uint type)
-{
-
-}
-
-void
 worldsave(const char *path)
 {
     /* TODO: Serialize world data and write to file */
@@ -470,7 +522,21 @@ worldload(const char *path)
 {
     /* TODO: Read file into world structure */
 }
+/*
+void
+worldaddpack(uint x, uint y, uint type, void *func)
+{
+    Segment *seg;
+    
 
+    seg = worldgetsegmentat(mainworld, x, y);
+
+    if (type == PACK_CIRCUIT) {
+    } else {
+        //Fixed function
+    }
+}
+*/
 /* Populate segment VBO and prepare for rendering 
  * TODO: Convert to thread worker job */
 void
@@ -569,7 +635,294 @@ layermesh(Segment *seg, Layer *layer, const float *color, uint depth)
 void
 freesegmesh(FreeSegment *seg)
 {
+    uint l, x, y, i, j, tile, tilenib, idxcount, color, len;
+    float x_min, x_max, y_min, y_max;
+    vec3 vert, norm = {0.0f, 0.0f, 1.0f};
+    vec2 uv;
+    ivec3 index;
+    Package *pack;
+    Pin *pin;
+    float uv_set[8];
 
+    idxcount = seg->wirevbo.indxcount / 3;
+
+    /* Draw wires */
+    for (l = 0; l < LAYER_TOTAL; l++) {
+        color = wireorder[LAYER_TOTAL - 1 - l];
+        vert[2] = l;
+ 
+        for (x = 0; x < seg->w; x++) {
+            for (y = 0; y < seg->h; y++) {
+                tile = seg->tiles[l][x * y].state & 0x1F;
+
+                if (!tile) continue;
+
+                if (tile == TILE_CENTRE) {
+                    for (i = 0; i < 4; i++) {
+                        vert[0] = x + tileverts[i * 3 + 0];
+                        vert[1] = y + tileverts[i * 3 + 1];
+                        uv[0] = wireuvs[0][i * 2 + 0];
+                        uv[1] = wireuvs[0][i * 2 + 1];
+                        vbufaddvertex(&seg->wirevbo, vert, uv, norm);
+                        veclistpush(&seg->colors, colors[color]);
+                    }
+                    SET_INDEX(index, idxcount, 0, 1, 2);
+                    vbufaddindex(&seg->wirevbo, index);
+                    SET_INDEX(index, idxcount, 2, 3, 0);
+                    vbufaddindex(&seg->wirevbo, index);
+
+                    idxcount += 4;
+                    seg->wirevbo.indxcount += 12;
+                } else {
+                    tilenib = tile & 0xF;
+
+                    for (i = 0; i < 4; i++) {
+                        vert[0] = x + tileverts[i * 3 + 0];
+                        vert[1] = y + tileverts[i * 3 + 1];
+                        uv[0] = wireuvs[tilenib][i * 2 + 0];
+                        uv[1] = wireuvs[tilenib][i * 2 + 1];
+                        vbufaddvertex(&seg->wirevbo, vert, uv, norm);
+                        veclistpush(&seg->colors, colors[color]);
+                    }
+                    SET_INDEX(index, idxcount, 0, 1, 2);
+                    vbufaddindex(&seg->wirevbo, index);
+                    SET_INDEX(index, idxcount, 2, 3, 0);
+                    vbufaddindex(&seg->wirevbo, index);
+
+                    idxcount += 4;
+                    seg->wirevbo.indxcount += 12;
+                }
+            }
+        }
+    }
+    idxcount = seg->vbo.indxcount / 3;
+
+    /* Draw packages */
+    for (l = 0; l < seg->packs->size; l++) {
+
+        pack = listat(seg->packs, l);
+
+        /* Draw body */
+        for (y = 0; y < pack->w; y++) {
+            for (x = 0; x < pack->h; x++) {
+                i = (x + y * 3) * 8;
+
+                /* TODO: Find flat, branchless means of doing this */ 
+                if (x == 0) {
+                    if (y == 0) {
+                        //  BOTTOM-LEFT
+                        memcpy(uv_set, packuvs + i + 6, 8 * sizeof(float));
+                    } else if (y == pack->h - 1) {
+                        //  TOP-LEFT
+                        memcpy(uv_set, packuvs + i + 0, 8 * sizeof(float));
+                    } else {
+                        //  LEFT
+                        memcpy(uv_set, packuvs + i + 3, 8 * sizeof(float));
+                    }
+                } else if (x == pack->w - 1) {
+                    if (y == 0) {
+                        //  BOTTOM-RIGHT
+                        memcpy(uv_set, packuvs + i + 8, 8 * sizeof(float));
+                    } else if (y == pack->h - 1) {
+                        //  TOP-RIGHT
+                        memcpy(uv_set, packuvs + i + 2, 8 * sizeof(float));
+                    } else {
+                        //  RIGHT
+                        memcpy(uv_set, packuvs + i + 5, 8 * sizeof(float));
+                    }
+                } else {
+                    if (y == 0) {
+                        //  BOTTOM
+                        memcpy(uv_set, packuvs + i + 7, 8 * sizeof(float));
+                    } else if (y == pack->h - 1) {
+                        //  TOP
+                        memcpy(uv_set, packuvs + i + 1, 8 * sizeof(float));
+                    } else {
+                        //  CENTRE
+                        memcpy(uv_set, packuvs + i + 4, 8 * sizeof(float));
+                    }
+                }
+
+                for (i = 0; i < 4; i++) {
+                    vert[0] = x + tileverts[i * 3 + 0];
+                    vert[1] = y + tileverts[i * 3 + 1];
+                    uv[0] = uv_set[i * 2 + 0];
+                    uv[1] = uv_set[i * 2 + 1];
+                    vbufaddvertex(&seg->vbo, vert, uv, norm);
+                }
+                SET_INDEX(index, idxcount, 0, 1, 2);
+                vbufaddindex(&seg->vbo, index);
+                SET_INDEX(index, idxcount, 2, 3, 0);
+                vbufaddindex(&seg->vbo, index);
+
+                idxcount += 4;
+                seg->vbo.indxcount += 12;
+            } 
+        }
+
+        /* Draw pins */
+        for (i = 0; i < pack->in_pins.size; i++) {
+            pin = dlistat(&pack->in_pins, i);
+
+            if (pin->x < 0) {
+                memcpy(uv_set, pinuvs + PINTEX_LEFT, 8 * sizeof(float));
+            } else {
+                if (pin->y < 0) {
+                    memcpy(uv_set, pinuvs + PINTEX_DOWN, 8 * sizeof(float));
+                } else if ((uint)pin->y >= pack->h) {
+                    memcpy(uv_set, pinuvs + PINTEX_UP, 8 * sizeof(float));
+                } else {
+                    memcpy(uv_set, pinuvs + PINTEX_RIGHT, 8 * sizeof(float));
+                }
+            }
+
+            for (j = 0; j < 4; j++) {
+                vert[0] = pack->x + pin->x + tileverts[j * 3 + 0];
+                vert[1] = pack->y + pin->y + tileverts[j * 3 + 1];
+                uv[0] = uv_set[j * 2 + 0];
+                uv[1] = uv_set[j * 2 + 1];
+                vbufaddvertex(&seg->vbo, vert, uv, norm);
+            }
+            SET_INDEX(index, idxcount, 0, 1, 2);
+            vbufaddindex(&seg->vbo, index);
+            SET_INDEX(index, idxcount, 2, 3, 0);
+            vbufaddindex(&seg->vbo, index);
+            
+            idxcount += 4;
+            seg->vbo.indxcount += 12;
+        }
+        for (i = 0; i < pack->out_pins.size; i++) {
+            pin = dlistat(&pack->out_pins, i);
+
+            if (pin->x < 0) {
+                memcpy(uv_set, pinuvs + PINTEX_LEFT, 8 * sizeof(float));
+            } else {
+                if (pin->y < 0) {
+                    memcpy(uv_set, pinuvs + PINTEX_DOWN, 8 * sizeof(float));
+                } else if ((uint)pin->y >= pack->h) {
+                    memcpy(uv_set, pinuvs + PINTEX_UP, 8 * sizeof(float));
+                } else {
+                    memcpy(uv_set, pinuvs + PINTEX_RIGHT, 8 * sizeof(float));
+                }
+            }
+
+            for (j = 0; j < 4; j++) {
+                vert[0] = pack->x + pin->x + tileverts[j * 3 + 0];
+                vert[1] = pack->y + pin->y + tileverts[j * 3 + 1];
+                uv[0] = uv_set[j * 2 + 0];
+                uv[1] = uv_set[j * 2 + 1];
+                vbufaddvertex(&seg->vbo, vert, uv, norm);
+            }
+            SET_INDEX(index, idxcount, 0, 1, 2);
+            vbufaddindex(&seg->vbo, index);
+            SET_INDEX(index, idxcount, 2, 3, 0);
+            vbufaddindex(&seg->vbo, index);
+            
+            idxcount += 4;
+            seg->vbo.indxcount += 12;
+        }
+
+        /* Draw text */
+
+        /* Body text */
+        len = strlen(pack->name);
+        x_min = (pack->x + (pack->w * 0.5f)) - 
+            ((PACK_FONT_SIZE + FONT_GAP) * len - FONT_GAP) * PIX_SIZE * 0.5f;
+        y_min = (pack->y + (pack->h * 0.5f)) -
+            PACK_FONT_SIZE * PIX_SIZE * 0.5f;
+        x_max = x_min + PACK_FONT_SIZE;
+        y_max = y_min + PACK_FONT_SIZE;
+
+        drawtext(&seg->vbo, pack->name, x_min, x_max, y_min, y_max);
+                
+        /* Pin Text */
+        x_min = (pack->x + 6 * PIX_SIZE);
+        x_max = x_min + PIN_FONT_SIZE;
+        y_min = (pack->y + pack->h) - 0.5f -
+            PIN_FONT_SIZE * PIX_SIZE * 0.5f;
+        y_max = y_min + PIN_FONT_SIZE;
+
+        for (i = 0; i < pack->in_pins.size; i++) {
+            pin = dlistat(&pack->in_pins, i);
+            len = strlen(pin->name);
+
+            drawtext(&seg->vbo, pack->name, x_min, x_max, y_min, y_max);
+
+            y_min -= 1.0f;
+            y_max -= 1.0f;
+        }
+        y_min = (pack->y + pack->h) - 0.5f -
+            PIN_FONT_SIZE * PIX_SIZE * 0.5f;
+        y_max = y_min + PIN_FONT_SIZE;
+
+        for (i = 0; i < pack->out_pins.size; i++) {
+            pin = dlistat(&pack->in_pins, i);
+            len = strlen(pin->name);
+            
+            drawtext(&seg->vbo, pack->name, x_min, x_max, y_min, y_max);
+
+            x_min = (pack->x + pack->w) - 6 * PIX_SIZE -
+                ((PIN_FONT_SIZE + FONT_GAP) * len - FONT_GAP) * PIX_SIZE;
+            x_max = x_min + PIN_FONT_SIZE;
+            y_min -= 1.0f;
+            y_max -= 1.0f;
+        }
+    }
+}
+
+void
+drawtext(VBuffer *vbo, const char *text,
+        float x_min, float x_max, float y_min, float y_max)
+{
+    uint i, len, idxcount;
+    vec3 vert, norm = {0.0f, 0.0f, 1.0f};
+    vec2 uv;
+    ivec3 index;
+    uchar chr;
+
+    idxcount = vbo->indxcount / 3;
+    len = strlen(text);
+    vert[2] = 0.0f;
+
+    for (i = 0; i < len; i++) {
+        chr = text[i];
+
+        vert[0] = x_max;
+        vert[1] = y_min;
+        uv[0] = fonttex.uvs[chr][0];
+        uv[1] = fonttex.uvs[chr][1];
+        vbufaddvertex(vbo, vert, uv, norm);
+
+        vert[0] = x_min;
+        vert[1] = y_min;
+        uv[0] = fonttex.uvs[chr][2];
+        uv[1] = fonttex.uvs[chr][3];
+        vbufaddvertex(vbo, vert, uv, norm);
+
+        vert[0] = x_min;
+        vert[1] = y_max;
+        uv[0] = fonttex.uvs[chr][4];
+        uv[1] = fonttex.uvs[chr][5];
+        vbufaddvertex(vbo, vert, uv, norm);
+
+        vert[0] = x_max;
+        vert[1] = y_max;
+        uv[0] = fonttex.uvs[chr][6];
+        uv[1] = fonttex.uvs[chr][7];
+        vbufaddvertex(vbo, vert, uv, norm);
+
+        x_min += PACK_FONT_SIZE + FONT_GAP * PIX_SIZE;
+        x_max += PACK_FONT_SIZE + FONT_GAP * PIX_SIZE;
+
+        vbufaddvertex(vbo, vert, uv, norm);
+        SET_INDEX(index, idxcount, 0, 1, 2);
+        vbufaddindex(vbo, index);
+        SET_INDEX(index, idxcount, 2, 3, 0);
+        vbufaddindex(vbo, index);
+
+        idxcount += 4;
+        vbo->indxcount += 12;
+    }
 }
 
 void
@@ -1019,24 +1372,23 @@ guitoolbarcreate(void)
     guiseteventcallback(buttons[BUTTON_OR], GUI_EVENT_MOUSEDOWN, guibuttonordown);
     guiseteventcallback(buttons[BUTTON_AND], GUI_EVENT_MOUSEDOWN, guibuttonanddown);
     guiseteventcallback(buttons[BUTTON_XOR], GUI_EVENT_MOUSEDOWN, guibuttonxordown);
+    guiseteventcallback(buttons[BUTTON_RED], GUI_EVENT_MOUSEDOWN, guibuttonreddown);
+    guiseteventcallback(buttons[BUTTON_GREEN], GUI_EVENT_MOUSEDOWN, guibuttongreendown);
+    guiseteventcallback(buttons[BUTTON_BLUE], GUI_EVENT_MOUSEDOWN, guibuttonbluedown);
+
     guiseteventcallback(buttons[BUTTON_NOT], GUI_EVENT_MOUSEUP, guibuttonmouseup);
     guiseteventcallback(buttons[BUTTON_OR], GUI_EVENT_MOUSEUP, guibuttonmouseup);
     guiseteventcallback(buttons[BUTTON_AND], GUI_EVENT_MOUSEUP, guibuttonmouseup);
     guiseteventcallback(buttons[BUTTON_XOR], GUI_EVENT_MOUSEUP, guibuttonmouseup);
+    guiseteventcallback(buttons[BUTTON_RED], GUI_EVENT_MOUSEUP, guibuttonredup);
+    guiseteventcallback(buttons[BUTTON_GREEN], GUI_EVENT_MOUSEUP, guibuttongreenup);
+    guiseteventcallback(buttons[BUTTON_BLUE], GUI_EVENT_MOUSEUP, guibuttonblueup);
+
     guiseteventcallback(buttons[BUTTON_NOT], GUI_EVENT_MOUSELEAVE, guibuttonmouseleave);
     guiseteventcallback(buttons[BUTTON_OR], GUI_EVENT_MOUSELEAVE, guibuttonmouseleave);
     guiseteventcallback(buttons[BUTTON_AND], GUI_EVENT_MOUSELEAVE, guibuttonmouseleave);
     guiseteventcallback(buttons[BUTTON_XOR], GUI_EVENT_MOUSELEAVE, guibuttonmouseleave);
-
-    guiseteventcallback(buttons[BUTTON_RED], GUI_EVENT_MOUSEDOWN, guibuttonreddown);
-    guiseteventcallback(buttons[BUTTON_RED], GUI_EVENT_MOUSEUP, guibuttonredup);
     guiseteventcallback(buttons[BUTTON_RED], GUI_EVENT_MOUSELEAVE, guibuttonredmouseleave);
-
-    guiseteventcallback(buttons[BUTTON_GREEN], GUI_EVENT_MOUSEDOWN, guibuttongreendown);
-    guiseteventcallback(buttons[BUTTON_GREEN], GUI_EVENT_MOUSEUP, guibuttongreenup);
     guiseteventcallback(buttons[BUTTON_GREEN], GUI_EVENT_MOUSELEAVE, guibuttongreenmouseleave);
-
-    guiseteventcallback(buttons[BUTTON_BLUE], GUI_EVENT_MOUSEDOWN, guibuttonbluedown);
-    guiseteventcallback(buttons[BUTTON_BLUE], GUI_EVENT_MOUSEUP, guibuttonblueup);
     guiseteventcallback(buttons[BUTTON_BLUE], GUI_EVENT_MOUSELEAVE, guibuttonbluemouseleave);
 }

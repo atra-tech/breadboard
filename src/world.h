@@ -5,7 +5,7 @@
  *
  *  Description:
  *  Structures for managing the grid-based world, and the visual
- *  representation of entities the user will built circuits with.
+ *  representation of entities the user will build circuits with.
  *
  *  */
 
@@ -24,6 +24,11 @@
 #define VIEW_DIST           4
 #define TILE_WIREGAP        0.2f
 #define WIRE_PERM_COUNT     16
+#define PACK_MAX_SIZE       64
+#define PIX_SIZE            0.015625f
+#define FONT_GAP            1
+#define PACK_FONT_SIZE      16
+#define PIN_FONT_SIZE       8
 
 enum layer_type {
     LAYER_RED,
@@ -64,6 +69,27 @@ enum mouse_mode {
     MOUSE_DRAGBOX
 };
 
+enum pack_textures {
+    PACKTEX_TOP_LEFT,
+    PACKTEX_TOP,
+    PACKTEX_TOP_RIGHT,
+    PACKTEX_LEFT,
+    PACKTEX_CENTRE,
+    PACKTEX_RIGHT,
+    PACKTEX_BOT_LEFT,
+    PACKTEX_BOT,
+    PACKTEX_BOT_RIGHT,
+    PACKTEX_TOTAL
+};
+
+enum pin_textures {
+    PINTEX_DOWN,
+    PINTEX_LEFT,
+    PINTEX_UP,
+    PINTEX_RIGHT,
+    PINTEX_TOTAL
+};
+
 typedef struct Tile {
     uint state;
 } Tile;
@@ -76,6 +102,7 @@ typedef struct FreeSegment {
     float x, y;
     uint w, h;
     VBuffer vbo;
+    VBuffer wirevbo;
     VecList colors;
     mat4 modelmat;
     Tile *tiles[LAYER_TOTAL];   //Size based on layer dimensions
@@ -102,6 +129,8 @@ typedef struct SelectBox {
 } SelectBox;
 
 void worldinit(World *world);
+void worldpush(World *world);
+void worldpop(void);
 void worldhandle(World *world, Event *e);
 void worldupdate(World *world, float dt);
 void worldrender(World *world, Camera *cam);
@@ -109,6 +138,8 @@ void worlddelete(World *world);
 
 void worldsave(const char *path);
 void worldload(const char *path);
+
+//void worldaddpack(uint x, uint y, uint type, void *func);
 
 Segment * worldgetsegment(World *world, uint x, uint y);
 Segment * worldgetsegmentat(World *world, uint x, uint y);

@@ -58,7 +58,7 @@ typedef struct {
     uint height;
     uint fontwidth;
     uint fontheight;
-    float uvs[255][8];
+    float uvs[256][8];
 } FontTex;
 
 typedef struct {

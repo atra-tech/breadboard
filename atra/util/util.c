@@ -25,9 +25,12 @@ loadfile(const char *path)
     fseek(file, 0, SEEK_END);
     int length = ftell(file);
     fseek(file, 0, SEEK_SET);
-    char *data = calloc(length + 2, sizeof(char));
+    char *data = malloc((length + 2) * sizeof(char));
     fread(data, 1, length, file);
+    data[length + 0] = 0;
+    data[length + 1] = EOF;
     fclose(file);
+
     return data;
 }
 

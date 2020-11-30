@@ -22,6 +22,13 @@ typedef struct {
 } List;
 
 typedef struct {
+    void *data;
+    size_t elemsize;
+    uint size;
+    uint cap;
+} DList;
+
+typedef struct {
     float *data;
     size_t elemsize;
     uint size;
@@ -50,6 +57,21 @@ void listfreemoverange(List *list, uint start, uint end);
 void listmoveelem(List *list, uint index, uint dest);
 void listdealloc(List *list);
 void listdelete(List *list);
+
+void dlistinit(DList *list, size_t elemsize);
+void *dlistat(DList *list, uint index);
+void dlistpush(DList *list, void *elem);
+void dlistinsert(DList *list, void *elem, uint index);
+void dliatpop(DList *list);
+void *dlistback(DList *list);
+void dlistclear(DList *list);
+void dlistclearnoresize(DList *list);
+void dlistremove(DList *list, uint index);
+void dlistremoverange(DList *list, uint start, uint end);
+void dlistfreemove(DList *list, uint index);
+void dlistfreemoverange(DList *list, uint start, uint end);
+void dlistmoveelem(DList *list, uint index, uint dest);
+void dlistdealloc(DList *list);
 
 void veclistinit(VecList *list, size_t elemsize);
 float * veclistat(VecList *list, uint index);

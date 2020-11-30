@@ -15,37 +15,81 @@
 #include "util/list.h"
 #include "util/htable.h"
 
-struct Circuit;
+enum wire_flags {
+    WIRE_ACTIVE  = BIT(0),
+    WIRE_CHANGED = BIT(1)
+};
+
+enum pin_type {
+    PIN_IN,
+    PIN_OUT
+};
+
+enum pack_type {
+    PACK_CIRCUIT,
+    PACK_NOT,
+    PACK_OR,
+    PACK_AND,
+    PACK_XOR,
+    PACK_MEMORY
+};
 
 typedef struct Wire {
     uint active;
     uint changed;
     List *ins;
-    List *outs;
-    List *segs;
-    HTable *tiles;
+    List *outs; 
+    List *segs;     //Knows when to update
+    HTable *tiles;  //Tiles it links to in world-space
 } Wire;
 
-typedef struct Package {
-    struct Circuit *circuit;
-    List *ins;
-    List *outs;
-} Package;
-
-typedef struct SpecialPack {
-    void (*packfunc)(struct SpecialPack *, List *, List *);
-    List *ins;
-    List *outs;
-} SpecialPack;
+typedef struct Memory {
+    uint *data;
+} Memory;
 
 typedef struct Circuit {
     List *wires;
     List *packs;
-    List *specpacks;
 } Circuit;
+
+typedef struct Pin {
+    int x, y;  /* Relative to Package origin */
+    uint state;
+    char *name;
+    List *ins;  /* Wire */
+    List *outs; /* Wire */
+} Pin;
+
+typedef struct Package {
+    uint x, y, w, h;
+    uint type;
+    void (*func)(struct Package *);
+    Memory *memory;
+    Circuit *circuit;
+    char *name;
+    DList in_pins;  /* Pin */
+    DList out_pins; /* Pin */
+} Package;
 
 
 Wire * wirecreate(void);
 void wiredelete(Wire *);
+void wireset(Wire *wire, uint value);
+
+void circuitdelete(Circuit *circuit);
+
+Package * packcreate(uint type, const char *path);
+void packdelete(Package *pack);
+void packload(Package *pack, const char *path);
+
+void pininit(Pin *pin, uint x, uint y, const char *name);
+void pindelete(Pin *pin);
+void pingetsig(Pin *pin);
+void pinputsig(Pin *pin);
+
+void packfunc_not(Package *pack);
+void packfunc_or(Package *pack);
+void packfunc_and(Package *pack);
+void packfunc_xor(Package *pack);
 
 #endif

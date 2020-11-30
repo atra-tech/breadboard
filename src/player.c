@@ -14,7 +14,7 @@
 #include "core.h"
 #include "util/log.h"
 
-#define PLAYER_SPEED 8
+#define PLAYER_SPEED 16
 
 void
 playerinit(Player *player)

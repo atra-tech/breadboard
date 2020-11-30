@@ -20,7 +20,7 @@
 #define INV_16            0.0625
 #define CAMERA_ZOOM_SPEED camera->zoom * INV_16
 #define CAMERA_MAX_ZOOM   512
-#define CAMERA_MIN_ZOOM   32
+#define CAMERA_MIN_ZOOM   16
 
 static void simhandle(void);
 static void simupdate(float dt);

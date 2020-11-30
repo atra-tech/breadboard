@@ -15,6 +15,13 @@
 
 static void listgrow(List *list);
 static void listshrink(List *list);
+static void dlistgrow(DList *list);
+static void dlistshrink(DList *list);
+
+/*
+ *  List Definitions
+ *
+ *  */
 
 List * 
 listcreate()
@@ -256,6 +263,249 @@ listdelete(List *list)
     free(list);
 }
 
+
+/*
+ *  DList Definitions
+ *
+ * */
+
+void
+dlistinit(DList *list, size_t elemsize)
+{
+    list->data = malloc(INIT_LIST_CAP * elemsize);
+    list->elemsize = elemsize;
+    list->cap = INIT_LIST_CAP;
+    list->size = 0;
+}
+
+void *
+dlistat(DList *list, uint index)
+{
+    return (char *)list->data + index * list->elemsize;
+}
+
+void
+dlistgrow(DList *list)
+{
+    void *newmem = realloc(list->data, list->cap * 2);
+
+    if (newmem) {
+        list->data = newmem;
+        list->cap *= 2;
+    } else {
+        logprint(LOG_ERROR, "list: Unable to reallocate memory");
+        list->size--;
+    }
+}
+
+void
+dlistshrink(DList *list)
+{
+    void **newmem = realloc(list->data, list->cap / 2);
+
+    if (newmem) {
+        list->data = newmem;
+        list->cap /= 2;
+    } else {
+        logprint(LOG_ERROR, "list: Unable to reallocate memory");
+        list->size++;
+    }
+}
+
+void
+dlistpush(DList *list, void *elem)
+{
+    if (list->size >= list->cap) {
+        dlistgrow(list);
+    }
+    memcpy((char *)list->data + (list->size * list->elemsize),
+        elem, list->elemsize);
+    list->size++;
+}
+
+void
+dlistinsert(DList *list, void *elem, uint index)
+{
+    uint start, end, length;
+    
+    if (list->size == list->cap) {
+        dlistgrow(list);
+    }
+    start = index * list->elemsize;
+    end = list->size * list->elemsize;
+    length = list->size * list->elemsize - start;
+
+    memmove((char *)list->data + start + list->elemsize,
+            (char *)list->data + start, length);
+    memcpy((char *)list->data + start, elem, list->elemsize);
+    list->size++;
+}
+
+void
+dliatpop(DList *list)
+{
+    if (list->size <= 0) {
+        list->size = 0;
+        logprint(LOG_ERROR, "list: Unable to pop element: "\
+                            "List is empty");
+    }
+    list->size--;
+
+    if (list->size < list->cap / 2) {
+        dlistshrink(list);
+    }
+}
+
+void *
+dlistback(DList *list)
+{
+    return (char *)list->data + (list->size - 1) * list->elemsize;
+}
+
+void
+dlistclear(DList *list)
+{
+    if (list->size > 0)
+    {
+        void *newmem = realloc(list->data, INIT_LIST_CAP * list->elemsize);
+
+        list->data = newmem;
+        list->size = 0;
+        list->cap = INIT_LIST_CAP;
+    }
+}
+
+void
+dlistclearnoresize(DList *list)
+{
+    list->size = 0;
+}
+
+void
+dlistremove(DList *list, uint index)
+{
+    uint start, end, length;
+
+    start = index * list->elemsize;
+    end = list->size * list->elemsize;
+    length = end - start - list->elemsize;
+    
+    memmove((char *)list->data + start,
+            (char *)list->data + start + list->elemsize,
+            length);
+    list->size--;
+
+    if (list->size < list->cap / 2) {
+        dlistshrink(list);
+    }
+}
+
+void
+dlistremoverange(DList *list, uint start, uint end)
+{
+    uint src, dest, length;
+    
+    src = end * list->elemsize;
+    dest = start * list->elemsize;
+    length = (list->size * list->elemsize) - src - list->elemsize;
+
+    memmove((char *)list->data + dest,
+            (char *)list->data + src + list->elemsize,
+            length);
+    list->size -= src - dest + list->elemsize;
+
+    if (list->size < list->cap / 2) {
+        dlistshrink(list);
+    }
+}
+
+void
+dlistfreemove(DList *list, uint index)
+{
+    uint start, end, length;
+    void *ptr;
+
+    start = index * list->elemsize;
+    end = list->size * list->elemsize;
+    length = end - start - list->elemsize;
+    ptr = (char *)list->data + start;
+    
+    free(ptr);
+    memmove((char *)list->data + start,
+            (char *)list->data + start + list->elemsize,
+            length);
+    list->size--;
+
+    if (list->size < list->cap / 2) {
+        dlistshrink(list);
+    }
+}
+
+void
+dlistfreemoverange(DList *list, uint start, uint end)
+{
+    uint i, src, dest, length;
+    void *ptr;
+    
+    src = end * list->elemsize;
+    dest = start * list->elemsize;
+    length = (list->size * list->elemsize) - src - list->elemsize;
+
+    for (i = dest; i <= src; i += list->elemsize) {
+        ptr = (char *)list->data + i;
+        free(ptr);
+    }
+
+    memmove((char *)list->data + dest,
+        (char *)list->data + src + list->elemsize,
+        length);
+    list->size -= src - dest + list->elemsize;
+
+    if (list->size < list->cap / 2) {
+        dlistshrink(list);
+    }
+}
+
+void
+dlistmoveelem(DList *list, uint index, uint dest)
+{
+    uint start, mid, end, length;
+    void *elem;
+        
+    start = index * list->elemsize;
+    mid = dest * list->elemsize;
+    end = list->size * list->elemsize;
+    length = mid - start - list->elemsize;
+    elem = malloc(list->elemsize);
+
+    memcpy(elem,
+        (char *)list->data + start,
+        list->elemsize);
+    memmove((char *)list->data + start,
+        (char *)list->data + start + list->elemsize,
+        length);
+    memcpy((char *)list->data + dest,
+        elem, list->elemsize);
+    free(elem);
+}
+
+void
+dlistdealloc(DList *list)
+{
+    uint i;
+    void *elem;
+
+    for (i = 0; i < list->size; i++) {
+        elem = *((char **)list->data + i * list->elemsize);
+        free(elem);
+    }
+}
+
+/*
+ *  VecList Definitions
+ *
+ * */
+
 void
 veclistinit(VecList *list, size_t elemsize)
 {
@@ -278,7 +528,7 @@ veclistpush(VecList *list, const float *vec)
         veclistgrow(list);
     }
     memcpy(list->data + (list->size * list->elemsize),
-            vec, list->elemsize * sizeof(float));
+        vec, list->elemsize * sizeof(float));
     list->size++;
 }
 
@@ -309,6 +559,11 @@ veclistdelete(VecList *list)
 {
     free(list->data);
 }
+
+/*
+ *  IVecList Definitions
+ *
+ * */
 
 void
 iveclistinit(IVecList *list, size_t elemsize)
