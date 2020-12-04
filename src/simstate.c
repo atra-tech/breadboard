@@ -101,12 +101,11 @@ simhandle(void)
         
         if(!guihandle(&e))
         {
-        
-        if (!player.locked) {
-            playerhandle(&player, &e);
-            worldhandle(world, &e);
-            handlescrollwheel(&e);
-        }
+            if (!player.locked) {
+                playerhandle(&player, &e);
+                worldhandle(world, &e);
+                handlescrollwheel(&e);
+            }
         }
         /*  TODO: handle player
          *  handle world if GUI falls through
@@ -131,13 +130,13 @@ simupdate(float dt)
 void
 simrender(void)
 {
-    glClearColor(0.784f, 0.761f, 0.725f, 1.0f);
+    /*glClearColor(0.784f, 0.761f, 0.725f, 1.0f);*/
+    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
 
     //worldrender(world, camera);
     /*  TODO: Render gates/ICs
      *  Render wire layers */
-
     worldrender(world, camera);
     guirender();
 }

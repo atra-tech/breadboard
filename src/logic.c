@@ -129,7 +129,7 @@ circuitdelete(Circuit *circuit)
 }
 
 void
-pininit(Pin *pin, uint x, uint y, const char *name)
+pininit(Pin *pin, int x, int y, const char *name)
 {
     uint len;
 
@@ -137,8 +137,8 @@ pininit(Pin *pin, uint x, uint y, const char *name)
     pin->x = x;
     pin->y = y;
     pin->state = 0;
-    pin->name = malloc(len + sizeof(char));
-    memcpy(pin->name, name, len);
+    pin->name = malloc((len + 1) * sizeof(char));
+    memcpy(pin->name, name, len + 1);
     pin->ins = listcreate();
     pin->outs = listcreate();
 }
@@ -249,8 +249,8 @@ packinit_not(Package *pack)
 {
     Pin pin;
 
-    pack->w = 1;
-    pack->h = 1;
+    pack->w = GATE_NOT_W;
+    pack->h = GATE_NOT_H;
     pack->func = packfunc_not;
     pack->name = malloc(4 * sizeof(char));
     memcpy(pack->name, "NOT", 4 * sizeof(char));
@@ -258,7 +258,7 @@ packinit_not(Package *pack)
     pininit(&pin, -1, 0, "A");
     dlistpush(&pack->in_pins, &pin);
     
-    pininit(&pin, 1, 1, "!A");
+    pininit(&pin, 1, 0, "!A");
     dlistpush(&pack->out_pins, &pin);
 }
 
@@ -267,8 +267,8 @@ packinit_or(Package *pack)
 {
     Pin pin;
 
-    pack->w = 1;
-    pack->h = 2;
+    pack->w = GATE_OR_W;
+    pack->h = GATE_OR_H;
     pack->func = packfunc_or;
     pack->name = malloc(3 * sizeof(char));
     memcpy(pack->name, "OR", 3 * sizeof(char));
@@ -291,8 +291,8 @@ packinit_and(Package *pack)
 {
     Pin pin;
 
-    pack->w = 1;
-    pack->h = 2;
+    pack->w = GATE_AND_W;
+    pack->h = GATE_AND_H;
     pack->func = packfunc_and;
     pack->name = malloc(4 * sizeof(char));
     memcpy(pack->name, "AND", 4 * sizeof(char));
@@ -303,10 +303,10 @@ packinit_and(Package *pack)
     pininit(&pin, -1, 0, "B");
     dlistpush(&pack->in_pins, &pin);
     
-    pininit(&pin, 1, 1, "Q");
+    pininit(&pin, 2, 1, "Q");
     dlistpush(&pack->out_pins, &pin);
 
-    pininit(&pin, 1, 0, "!Q");
+    pininit(&pin, 2, 0, "!Q");
     dlistpush(&pack->out_pins, &pin);
 }
 
@@ -315,8 +315,8 @@ packinit_xor(Package *pack)
 {
     Pin pin;
 
-    pack->w = 1;
-    pack->h = 2;
+    pack->w = GATE_XOR_W;
+    pack->h = GATE_XOR_H;
     pack->func = packfunc_xor;
     pack->name = malloc(4 * sizeof(char));
     memcpy(pack->name, "XOR", 4 * sizeof(char));

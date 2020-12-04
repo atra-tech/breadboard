@@ -38,8 +38,8 @@ static void wirecalcuvs(void);
 static void wiremovetotop(uint wire);
 static void guitoolbarcreate(void);
 static void fullremesh(void);
-static void drawtext(VBuffer *vbo, const char *text,
-        float x_min, float x_max, float y_min, float y_max);
+static void drawtext(VBuffer *vbo, VecList *colors, const char *text,
+        uint fontsize, float x_min, float x_max, float y_min, float y_max);
 
 /*  
  *  VERTEX DATA
@@ -94,14 +94,17 @@ static const uint wiretexcoords[WIRE_PERM_COUNT][2] = {
 
 static float wireuvs[WIRE_PERM_COUNT][8];
 
+static const float colorwhite[] = {1.0f, 1.0f, 1.0f};
 static const float colorred[]   = {1.0f, 0.2f, 0.2f};
 static const float colorgreen[] = {0.4f, 1.0f, 0.2f};
 static const float colorblue[]  = {0.2f, 0.4f, 1.0f};
 static const float *colors[] = {colorred, colorgreen, colorblue};
+static const float packtextcolor[] = {0.83f, 0.80f, 0.80f};
 
 static int init = 0;
 static Stack *worldstack;
 static World *mainworld;
+static FreeSegment *mouseseg;
 static Shader worldshader;
 static Shader bgshader;
 static Texture circuittex;
@@ -126,7 +129,7 @@ worldstart(void)
             "res/shader/bgfrag.glsl");
     texfind(&bgtex, "res/texture/background_small.png");
     texfind(&circuittex, "res/texture/circuits.png");
-    fontfind(&fonttex, "res/font/maledict_final.png", 8, 8);
+    fontfind(&fonttex, "res/font/maledict.png", 8, 8);
 
     circuittex.imagesize = 1024;
     circuittex.texsize = 64;
@@ -138,6 +141,7 @@ worldstart(void)
     wireorder[0] = WIRE_RED;
     wireorder[1] = WIRE_GREEN;
     wireorder[2] = WIRE_BLUE;
+    mouseseg = NULL;
 
     /* Populate circuit package texture UVs */
     for (i = 0; i < 3; i++) {
@@ -150,15 +154,23 @@ worldstart(void)
     for (i = 0; i < PINTEX_TOTAL; i++) {
         texget(&circuittex, i, 3, pinuvs + i * 8);
     }
-    
+    worldstack = stackcreate();
     filesysinit();
     guitoolbarcreate();
+    init = 1;
 }
 
 void
 worldshutdown(void)
 {
+    if (mouseseg) {
+        freesegdelete(mouseseg);
+    }
     filesysshutdown();
+    stackdelete(worldstack);
+    shaderdelete(&worldshader);
+    shaderdelete(&bgshader);
+    init = 0;
 }
 
 void
@@ -179,7 +191,6 @@ worldinit(World *world)
             world->segs[i * SEGMENTS_PER_ROW + j] = seg;
         }
     }
-    worldstack = stackcreate();
     worldpush(world);
 }
 
@@ -190,12 +201,23 @@ worldpush(World *world)
     mainworld = world;
 }
 
+World *
+worldtop(void)
+{
+    return mainworld;
+}
+
 void
 worldpop(void)
 {
     worlddelete(stacktop(worldstack));
     stackpop(worldstack);
-    mainworld = stacktop(worldstack);
+
+    if (worldstack->size == 0) {
+        worldshutdown();
+    } else {
+        mainworld = stacktop(worldstack);
+    }
 }
 
 void
@@ -211,7 +233,6 @@ worlddelete(World *world)
             free(seg);
         }
     }
-    //stackdelete(worldstack);
 }
 
 void
@@ -226,7 +247,10 @@ segmentinit(Segment *seg, uint x, uint y)
 
     vbufinit(&seg->vbo);
     vbufinit(&seg->wirevbo);
+    vbufinit(&seg->textvbo);
     veclistinit(&seg->colors, 3);
+    veclistinit(&seg->textcolors, 3);
+
     glm_mat4_identity(seg->modelmat);
     glm_translate_x(seg->modelmat, x * SEGMENT_SIZE);
     glm_translate_y(seg->modelmat, y * SEGMENT_SIZE);
@@ -234,6 +258,8 @@ segmentinit(Segment *seg, uint x, uint y)
     for (i = 0; i < LAYER_TOTAL; i++) {
         memset(seg->layers[i].tiles, 0, LAYER_TILECOUNT * sizeof(Tile));
     }
+
+    listpushback(seg->packs, packcreate(PACK_AND, NULL));
 }
 
 void
@@ -241,7 +267,9 @@ segmentdelete(Segment *seg)
 {
     vbufdelete(&seg->vbo);
     vbufdelete(&seg->wirevbo);
+    vbufdelete(&seg->textvbo);
     veclistdelete(&seg->colors);
+    veclistdelete(&seg->textcolors);
     listdelete(seg->packs);
 }
 
@@ -256,8 +284,10 @@ freeseginit(FreeSegment *seg, float x, float y, uint w, uint h)
     seg->h = h;
     seg->packs = listcreate();
 
-    vbufinit(&seg->vbo);
+    vbufinit(&seg->wirevbo);
+    vbufinit(&seg->textvbo);
     veclistinit(&seg->colors, 3);
+    veclistinit(&seg->textcolors, 3);
 
     glm_mat4_identity(seg->modelmat);
     glm_translate_x(seg->modelmat, x);
@@ -273,8 +303,10 @@ freesegdelete(FreeSegment *seg)
 {
     uint i;
 
-    vbufdelete(&seg->vbo);
+    vbufdelete(&seg->wirevbo);
+    vbufdelete(&seg->textvbo);
     veclistdelete(&seg->colors);
+    veclistdelete(&seg->textcolors);
     listdelete(seg->packs);
 
     for (i = 0; i < LAYER_TOTAL; i++) {
@@ -372,7 +404,17 @@ worldhandle(World *world, Event *e)
         tile = worldgettileat(world, tmp_mx, tmp_my, currentwire);
         tilehandlemouse(tile, tmp_mx, tmp_my);
         seg->dirty = 1;
+    } else if (mousemode == MOUSE_GRAB) {
+        my = cam->height - my;
+        tmp_mx = cam->ent.x + (mx - (cam->width / 2.0)) / (cam->zoom / 2.0);
+        tmp_my = cam->ent.y + (my - (cam->height / 2.0)) / (cam->zoom / 2.0);
+
+        glm_mat4_identity(mouseseg->modelmat);
+        glm_translate_x(mouseseg->modelmat, tmp_mx);
+        glm_translate_y(mouseseg->modelmat, tmp_my);
     }
+    //prev_mx = mx;
+    //prev_my = my;
 }
 
 void
@@ -455,6 +497,7 @@ worldrender(World *world, Camera *cam)
     int i, j, k;
     Segment *seg;
 
+    /* Render background */
     texsetactivetexture(0);
     texbind(&bgtex);
     shaderbind(&bgshader);
@@ -467,11 +510,13 @@ worldrender(World *world, Camera *cam)
     glDisable(GL_CULL_FACE);
     glDisable(GL_DEPTH_TEST);
 
-    /* TODO: Change segment render distance to be based on camera zoom */
+    /* TODO: Change segment render distance to be based on camera zoom 
+     * TODO: Rework to use common background VBuffer, since this data is identical for each seg
+     * */
     for (i = seg_x - VIEW_DIST; i <= seg_x + VIEW_DIST; i++) {
         for (j = seg_y - VIEW_DIST; j <= seg_y + VIEW_DIST; j++) {
             if (i < 0 || i > SEGMENTS_PER_ROW - 1 ||
-                    j < 0 || j > SEGMENTS_PER_ROW - 1)  {
+                    j < 0 || j > SEGMENTS_PER_ROW - 1) {
                 continue;
             }
             seg = worldgetsegment(world, i, j);
@@ -487,6 +532,7 @@ worldrender(World *world, Camera *cam)
         }
     }
 
+    /* Render packages and wires */
     texbind(&circuittex);
     shaderbind(&worldshader);
     shaderloadprojviewmat(&worldshader, cam->projviewmat);
@@ -508,7 +554,47 @@ worldrender(World *world, Camera *cam)
         }
     }
 
+    /* Render text */
+    fontbind(&fonttex);
+    //shaderbind(&bgshader);
+    //shaderloadprojviewmat(&bgshader, cam->projviewmat);
+    //shaderloadviewmat(&bgshader, cam->viewmat);
+    //shaderaddint(&worldshader, "albedo_map", 0);
+
+    for (i = seg_x - VIEW_DIST; i <= seg_x + VIEW_DIST; i++) {
+        for (j = seg_y - VIEW_DIST; j <= seg_y + VIEW_DIST; j++) {
+            if (i < 0 || i > SEGMENTS_PER_ROW - 1 ||
+                    j < 0 || j > SEGMENTS_PER_ROW - 1)  {
+                continue;
+            }
+            seg = worldgetsegment(world, i, j);
+
+            vbufbindvao(&seg->textvbo);
+            shaderloadmodelmat(&bgshader, seg->modelmat);
+            glDrawElements(GL_TRIANGLES,
+                    seg->wirevbo.indxcount, GL_UNSIGNED_INT, NULL);
+        }
+    }
     shaderunbind();
+}
+
+void
+worldrendermouseseg(Camera *cam)
+{
+    texbind(&circuittex);
+    shaderbind(&worldshader);
+
+    shaderloadmodelmat(&worldshader, cam->viewmat);
+
+    glDisable(GL_CULL_FACE);
+    glDisable(GL_DEPTH_TEST);
+
+    if (mouseseg) {
+        vbufbindvao(&mouseseg->wirevbo);
+        shaderloadmodelmat(&worldshader, mouseseg->modelmat);
+        glDrawElements(GL_TRIANGLES,
+                mouseseg->wirevbo.indxcount, GL_UNSIGNED_INT, NULL);
+    }
 }
 
 void
@@ -536,45 +622,240 @@ worldaddpack(uint x, uint y, uint type, void *func)
         //Fixed function
     }
 }
+
 */
 /* Populate segment VBO and prepare for rendering 
  * TODO: Convert to thread worker job */
 void
 segmentmesh(Segment *seg)
 {
-    uint i, idxcount;
+    uint l, x, y, i, j, idxcount, len;
+    float x_min, x_max, y_min, y_max;
     vec3 vert, norm;
     vec2 uv;
     ivec3 index;
+    Package *pack;
+    Pin *pin;
+    float *uvptr;
+    VBuffer *vbo;
 
+    /* Draw background */
     idxcount = 0;
+    vbo = &seg->vbo;
+
     vbufreset(&seg->vbo);
     vbufreset(&seg->wirevbo);
+    vbufreset(&seg->textvbo);
     veclistclear(&seg->colors);
+    veclistclear(&seg->textcolors);
     
     for (i = 0; i < 4; i++) {
         COPY_VEC(vert, segmentverts, i, 3);
         COPY_VEC(uv, segmentuvs, i, 2);
         COPY_VEC(norm, quadnorms, i, 3);
-        vbufaddvertex(&seg->vbo, vert, uv, norm);
+        vbufaddvertex(vbo, vert, uv, norm);
     }
     SET_INDEX(index, idxcount, 0, 1, 2);
-    vbufaddindex(&seg->vbo, index);
+    vbufaddindex(vbo, index);
     SET_INDEX(index, idxcount, 2, 3, 0);
-    vbufaddindex(&seg->vbo, index);
+    vbufaddindex(vbo, index);
 
     idxcount += 4;
-    seg->vbo.indxcount += 12;
+    vbo->indxcount += 12;
+    
+    vbufbind(vbo);
 
+    /* Draw wires */
     layermesh(seg, &seg->layers[wireorder[2]], colors[wireorder[2]], 1);
     layermesh(seg, &seg->layers[wireorder[1]], colors[wireorder[1]], 2);
     layermesh(seg, &seg->layers[wireorder[0]], colors[wireorder[0]], 3);
-
-    /* TODO: Render ICs */
     
-    vbufbind(&seg->vbo);
-    vbufbind(&seg->wirevbo);
-    vbufbindvbo(&seg->wirevbo, &seg->colors);
+    vbo = &seg->wirevbo;
+    idxcount = vbo->indxcount / 3;
+    
+    /* Draw packages */
+    for (l = 0; l < seg->packs->size; l++) {
+
+        pack = listat(seg->packs, l);
+
+        /* Draw body */
+        for (y = 0; y < pack->h; y++) {
+            for (x = 0; x < pack->w; x++) {
+
+                /* TODO: Find flat, branchless means of doing this */ 
+                if (x == 0) {
+                    if (y == 0) {
+                        //  BOTTOM-LEFT
+                        uvptr = packuvs + 6 * 8;
+                    } else if (y == pack->h - 1) {
+                        //  TOP-LEFT
+                        uvptr = packuvs + 0 * 8;
+                    } else {
+                        //  LEFT
+                        uvptr = packuvs + 3 * 8;
+                    }
+                } else if (x == pack->w - 1) {
+                    if (y == 0) {
+                        //  BOTTOM-RIGHT
+                        uvptr = packuvs + 8 * 8;
+                    } else if (y == pack->h - 1) {
+                        //  TOP-RIGHT
+                        uvptr = packuvs + 2 * 8;
+                    } else {
+                        //  RIGHT
+                        uvptr = packuvs + 5 * 8;
+                    }
+                } else {
+                    if (y == 0) {
+                        //  BOTTOM
+                        uvptr = packuvs + 7 * 8;
+                    } else if (y == pack->h - 1) {
+                        //  TOP
+                        uvptr = packuvs + 1 * 8;
+                    } else {
+                        //  CENTRE
+                        uvptr = packuvs + 4 * 8;
+                    }
+                }
+
+                for (i = 0; i < 4; i++) {
+                    vert[0] = x + tileverts[i * 3 + 0];
+                    vert[1] = y + tileverts[i * 3 + 1];
+                    uv[0] = uvptr[i * 2 + 0];
+                    uv[1] = uvptr[i * 2 + 1];
+                    vbufaddvertex(vbo, vert, uv, norm);
+                    veclistpush(&seg->colors, colorwhite);
+                }
+                SET_INDEX(index, idxcount, 0, 1, 2);
+                vbufaddindex(vbo, index);
+                SET_INDEX(index, idxcount, 2, 3, 0);
+                vbufaddindex(vbo, index);
+
+                idxcount += 4;
+                vbo->indxcount += 12;
+            } 
+        }
+
+        /* Draw pins */
+        for (i = 0; i < pack->in_pins.size; i++) {
+            pin = dlistat(&pack->in_pins, i);
+
+            if (pin->x < 0) {
+                uvptr = pinuvs + PINTEX_LEFT * 8;
+            } else {
+                if (pin->y < 0) {
+                    uvptr = pinuvs + PINTEX_DOWN * 8;
+                } else if ((uint)pin->y >= pack->h) {
+                    uvptr = pinuvs + PINTEX_UP * 8;
+                } else {
+                    uvptr = pinuvs + PINTEX_RIGHT * 8;
+                }
+            }
+
+            for (j = 0; j < 4; j++) {
+                vert[0] = (int)pack->x + pin->x + tileverts[j * 3 + 0];
+                vert[1] = (int)pack->y + pin->y + tileverts[j * 3 + 1];
+                uv[0] = uvptr[j * 2 + 0];
+                uv[1] = uvptr[j * 2 + 1];
+                vbufaddvertex(vbo, vert, uv, norm);
+                veclistpush(&seg->colors, colorwhite);
+            }
+            SET_INDEX(index, idxcount, 0, 1, 2);
+            vbufaddindex(vbo, index);
+            SET_INDEX(index, idxcount, 2, 3, 0);
+            vbufaddindex(vbo, index);
+            
+            idxcount += 4;
+            seg->vbo.indxcount += 12;
+        }
+        for (i = 0; i < pack->out_pins.size; i++) {
+            pin = dlistat(&pack->out_pins, i);
+
+            if (pin->x < 0) {
+                uvptr = pinuvs + PINTEX_LEFT * 8;
+            } else {
+                if (pin->y < 0) {
+                    uvptr = pinuvs + PINTEX_DOWN * 8;
+                } else if ((uint)pin->y >= pack->h) {
+                    uvptr = pinuvs + PINTEX_UP * 8;
+                } else {
+                    uvptr = pinuvs + PINTEX_RIGHT * 8;
+                }
+            }
+
+            for (j = 0; j < 4; j++) {
+                vert[0] = pack->x + pin->x + tileverts[j * 3 + 0];
+                vert[1] = pack->y + pin->y + tileverts[j * 3 + 1];
+                uv[0] = uvptr[j * 2 + 0];
+                uv[1] = uvptr[j * 2 + 1];
+                vbufaddvertex(vbo, vert, uv, norm);
+                veclistpush(&seg->colors, colorwhite);
+            }
+            SET_INDEX(index, idxcount, 0, 1, 2);
+            vbufaddindex(vbo, index);
+            SET_INDEX(index, idxcount, 2, 3, 0);
+            vbufaddindex(vbo, index);
+            
+            idxcount += 4;
+            vbo->indxcount += 12;
+        }
+        vbufbind(vbo);
+        vbufbindvbo(vbo, &seg->colors);
+
+        /* Draw text */
+        vbo = &seg->textvbo;
+        idxcount = vbo->indxcount / 3;
+
+        /* Body text */
+        len = strlen(pack->name);
+        x_min = (pack->x + (pack->w * 0.5f)) - 
+            ((PACK_FONT_SIZE + FONT_GAP) * len - FONT_GAP) * PIX_SIZE * 0.5f;
+        y_min = (pack->y + (pack->h * 0.5f)) -
+            PACK_FONT_SIZE * PIX_SIZE * 0.5f;
+        x_max = x_min + PACK_FONT_SIZE * PIX_SIZE;
+        y_max = y_min + PACK_FONT_SIZE * PIX_SIZE;
+
+        drawtext(vbo, &seg->textcolors, pack->name,
+                PACK_FONT_SIZE, x_min, x_max, y_min, y_max);
+                
+        /* Pin Text */
+        x_min = (pack->x + 6 * PIX_SIZE);
+        x_max = x_min + PIN_FONT_SIZE * PIX_SIZE;
+        y_min = (pack->y + pack->h) - 0.5f -
+            PIN_FONT_SIZE * PIX_SIZE * 0.5f;
+        y_max = y_min + PIN_FONT_SIZE * PIX_SIZE;
+
+        for (i = 0; i < pack->in_pins.size; i++) {
+            pin = dlistat(&pack->in_pins, i);
+            len = strlen(pin->name);
+
+            drawtext(vbo, &seg->textcolors, pin->name,
+                    PIN_FONT_SIZE, x_min, x_max, y_min, y_max);
+
+            y_min -= 1.0f;
+            y_max -= 1.0f;
+        }
+        y_min = (pack->y + pack->h) - 0.5f -
+            PIN_FONT_SIZE * PIX_SIZE * 0.5f;
+        y_max = y_min + PIN_FONT_SIZE * PIX_SIZE;
+
+        for (i = 0; i < pack->out_pins.size; i++) {
+            pin = dlistat(&pack->out_pins, i);
+            len = strlen(pin->name);
+
+            x_min = (pack->x + pack->w) - 6 * PIX_SIZE -
+                ((PIN_FONT_SIZE + FONT_GAP) * len - FONT_GAP) * PIX_SIZE;
+            x_max = x_min + PIN_FONT_SIZE * PIX_SIZE;
+            
+            drawtext(vbo, &seg->textcolors, pin->name,
+                    PIN_FONT_SIZE, x_min, x_max, y_min, y_max);
+
+            y_min -= 1.0f;
+            y_max -= 1.0f;
+        }
+        vbufbind(vbo);
+        vbufbindvbo(vbo, &seg->textcolors);
+    }
 }
 
 void
@@ -625,6 +906,7 @@ layermesh(Segment *seg, Layer *layer, const float *color, uint depth)
                 vbufaddindex(&seg->wirevbo, index);
                 SET_INDEX(index, idxcount, 2, 3, 0);
                 vbufaddindex(&seg->wirevbo, index);
+
                 idxcount += 4;
                 seg->wirevbo.indxcount += 12;
             }
@@ -642,9 +924,16 @@ freesegmesh(FreeSegment *seg)
     ivec3 index;
     Package *pack;
     Pin *pin;
-    float uv_set[8];
+    float *uvptr;
+    VBuffer *vbo;
 
-    idxcount = seg->wirevbo.indxcount / 3;
+    vbo = &seg->wirevbo;
+    idxcount = vbo->indxcount / 3;
+    
+    vbufreset(&seg->wirevbo);
+    vbufreset(&seg->textvbo);
+    veclistclear(&seg->colors);
+    veclistclear(&seg->textcolors);
 
     /* Draw wires */
     for (l = 0; l < LAYER_TOTAL; l++) {
@@ -663,13 +952,13 @@ freesegmesh(FreeSegment *seg)
                         vert[1] = y + tileverts[i * 3 + 1];
                         uv[0] = wireuvs[0][i * 2 + 0];
                         uv[1] = wireuvs[0][i * 2 + 1];
-                        vbufaddvertex(&seg->wirevbo, vert, uv, norm);
+                        vbufaddvertex(vbo, vert, uv, norm);
                         veclistpush(&seg->colors, colors[color]);
                     }
                     SET_INDEX(index, idxcount, 0, 1, 2);
-                    vbufaddindex(&seg->wirevbo, index);
+                    vbufaddindex(vbo, index);
                     SET_INDEX(index, idxcount, 2, 3, 0);
-                    vbufaddindex(&seg->wirevbo, index);
+                    vbufaddindex(vbo, index);
 
                     idxcount += 4;
                     seg->wirevbo.indxcount += 12;
@@ -681,21 +970,20 @@ freesegmesh(FreeSegment *seg)
                         vert[1] = y + tileverts[i * 3 + 1];
                         uv[0] = wireuvs[tilenib][i * 2 + 0];
                         uv[1] = wireuvs[tilenib][i * 2 + 1];
-                        vbufaddvertex(&seg->wirevbo, vert, uv, norm);
+                        vbufaddvertex(vbo, vert, uv, norm);
                         veclistpush(&seg->colors, colors[color]);
                     }
                     SET_INDEX(index, idxcount, 0, 1, 2);
-                    vbufaddindex(&seg->wirevbo, index);
+                    vbufaddindex(vbo, index);
                     SET_INDEX(index, idxcount, 2, 3, 0);
-                    vbufaddindex(&seg->wirevbo, index);
+                    vbufaddindex(vbo, index);
 
                     idxcount += 4;
-                    seg->wirevbo.indxcount += 12;
+                    vbo->indxcount += 12;
                 }
             }
         }
     }
-    idxcount = seg->vbo.indxcount / 3;
 
     /* Draw packages */
     for (l = 0; l < seg->packs->size; l++) {
@@ -705,58 +993,60 @@ freesegmesh(FreeSegment *seg)
         /* Draw body */
         for (y = 0; y < pack->w; y++) {
             for (x = 0; x < pack->h; x++) {
-                i = (x + y * 3) * 8;
 
-                /* TODO: Find flat, branchless means of doing this */ 
+                /* TODO: Find flat, branchless means of doing this
+                 *       At least use pointer arithmetic, memcpy here is bad. */
                 if (x == 0) {
                     if (y == 0) {
                         //  BOTTOM-LEFT
-                        memcpy(uv_set, packuvs + i + 6, 8 * sizeof(float));
+                        uvptr = packuvs + 6 * 8;
                     } else if (y == pack->h - 1) {
                         //  TOP-LEFT
-                        memcpy(uv_set, packuvs + i + 0, 8 * sizeof(float));
+                        uvptr = packuvs + 0 * 8;
                     } else {
                         //  LEFT
-                        memcpy(uv_set, packuvs + i + 3, 8 * sizeof(float));
+                        uvptr = packuvs + 3 * 8;
                     }
                 } else if (x == pack->w - 1) {
                     if (y == 0) {
                         //  BOTTOM-RIGHT
-                        memcpy(uv_set, packuvs + i + 8, 8 * sizeof(float));
+                        uvptr = packuvs + 8 * 8;
                     } else if (y == pack->h - 1) {
                         //  TOP-RIGHT
-                        memcpy(uv_set, packuvs + i + 2, 8 * sizeof(float));
+                        uvptr = packuvs + 2 * 8;
                     } else {
                         //  RIGHT
-                        memcpy(uv_set, packuvs + i + 5, 8 * sizeof(float));
+                        uvptr = packuvs + 5 * 8;
                     }
                 } else {
                     if (y == 0) {
                         //  BOTTOM
-                        memcpy(uv_set, packuvs + i + 7, 8 * sizeof(float));
+                        uvptr = packuvs + 7 * 8;
                     } else if (y == pack->h - 1) {
                         //  TOP
-                        memcpy(uv_set, packuvs + i + 1, 8 * sizeof(float));
+                        uvptr = packuvs + 1 * 8;
                     } else {
                         //  CENTRE
-                        memcpy(uv_set, packuvs + i + 4, 8 * sizeof(float));
+                        uvptr = packuvs + 4 * 8;
                     }
                 }
 
+                
                 for (i = 0; i < 4; i++) {
                     vert[0] = x + tileverts[i * 3 + 0];
                     vert[1] = y + tileverts[i * 3 + 1];
-                    uv[0] = uv_set[i * 2 + 0];
-                    uv[1] = uv_set[i * 2 + 1];
-                    vbufaddvertex(&seg->vbo, vert, uv, norm);
+                    uv[0] = uvptr[i * 2 + 0];
+                    uv[1] = uvptr[i * 2 + 1];
+                    vbufaddvertex(vbo, vert, uv, norm);
+                    veclistpush(&seg->colors, colorwhite);
                 }
                 SET_INDEX(index, idxcount, 0, 1, 2);
-                vbufaddindex(&seg->vbo, index);
+                vbufaddindex(vbo, index);
                 SET_INDEX(index, idxcount, 2, 3, 0);
-                vbufaddindex(&seg->vbo, index);
+                vbufaddindex(vbo, index);
 
                 idxcount += 4;
-                seg->vbo.indxcount += 12;
+                vbo->indxcount += 12;
             } 
         }
 
@@ -765,64 +1055,70 @@ freesegmesh(FreeSegment *seg)
             pin = dlistat(&pack->in_pins, i);
 
             if (pin->x < 0) {
-                memcpy(uv_set, pinuvs + PINTEX_LEFT, 8 * sizeof(float));
+                uvptr = pinuvs + PINTEX_LEFT * 8;
             } else {
                 if (pin->y < 0) {
-                    memcpy(uv_set, pinuvs + PINTEX_DOWN, 8 * sizeof(float));
+                    uvptr = pinuvs + PINTEX_DOWN * 8;
                 } else if ((uint)pin->y >= pack->h) {
-                    memcpy(uv_set, pinuvs + PINTEX_UP, 8 * sizeof(float));
+                    uvptr = pinuvs + PINTEX_UP * 8;
                 } else {
-                    memcpy(uv_set, pinuvs + PINTEX_RIGHT, 8 * sizeof(float));
+                    uvptr = pinuvs + PINTEX_RIGHT * 8;
                 }
             }
 
             for (j = 0; j < 4; j++) {
                 vert[0] = pack->x + pin->x + tileverts[j * 3 + 0];
                 vert[1] = pack->y + pin->y + tileverts[j * 3 + 1];
-                uv[0] = uv_set[j * 2 + 0];
-                uv[1] = uv_set[j * 2 + 1];
-                vbufaddvertex(&seg->vbo, vert, uv, norm);
+                uv[0] = uvptr[j * 2 + 0];
+                uv[1] = uvptr[j * 2 + 1];
+                vbufaddvertex(vbo, vert, uv, norm);
+                veclistpush(&seg->colors, colorwhite);
             }
             SET_INDEX(index, idxcount, 0, 1, 2);
-            vbufaddindex(&seg->vbo, index);
+            vbufaddindex(vbo, index);
             SET_INDEX(index, idxcount, 2, 3, 0);
-            vbufaddindex(&seg->vbo, index);
+            vbufaddindex(vbo, index);
             
             idxcount += 4;
-            seg->vbo.indxcount += 12;
+            vbo->indxcount += 12;
         }
         for (i = 0; i < pack->out_pins.size; i++) {
             pin = dlistat(&pack->out_pins, i);
 
             if (pin->x < 0) {
-                memcpy(uv_set, pinuvs + PINTEX_LEFT, 8 * sizeof(float));
+                uvptr = pinuvs + PINTEX_LEFT * 8;
             } else {
                 if (pin->y < 0) {
-                    memcpy(uv_set, pinuvs + PINTEX_DOWN, 8 * sizeof(float));
+                    uvptr = pinuvs + PINTEX_DOWN * 8;
                 } else if ((uint)pin->y >= pack->h) {
-                    memcpy(uv_set, pinuvs + PINTEX_UP, 8 * sizeof(float));
+                    uvptr = pinuvs + PINTEX_UP * 8;
                 } else {
-                    memcpy(uv_set, pinuvs + PINTEX_RIGHT, 8 * sizeof(float));
+                    uvptr = pinuvs + PINTEX_RIGHT * 8;
                 }
             }
 
             for (j = 0; j < 4; j++) {
                 vert[0] = pack->x + pin->x + tileverts[j * 3 + 0];
                 vert[1] = pack->y + pin->y + tileverts[j * 3 + 1];
-                uv[0] = uv_set[j * 2 + 0];
-                uv[1] = uv_set[j * 2 + 1];
-                vbufaddvertex(&seg->vbo, vert, uv, norm);
+                uv[0] = uvptr[j * 2 + 0];
+                uv[1] = uvptr[j * 2 + 1];
+                vbufaddvertex(vbo, vert, uv, norm);
+                veclistpush(&seg->colors, colorwhite);
             }
             SET_INDEX(index, idxcount, 0, 1, 2);
-            vbufaddindex(&seg->vbo, index);
+            vbufaddindex(vbo, index);
             SET_INDEX(index, idxcount, 2, 3, 0);
-            vbufaddindex(&seg->vbo, index);
+            vbufaddindex(vbo, index);
             
             idxcount += 4;
-            seg->vbo.indxcount += 12;
+            vbo->indxcount += 12;
         }
+        vbufbind(vbo);
+        vbufbindvbo(vbo, &seg->colors);
 
         /* Draw text */
+        vbo = &seg->textvbo;
+        idxcount = vbo->indxcount / 3;
 
         /* Body text */
         len = strlen(pack->name);
@@ -830,48 +1126,54 @@ freesegmesh(FreeSegment *seg)
             ((PACK_FONT_SIZE + FONT_GAP) * len - FONT_GAP) * PIX_SIZE * 0.5f;
         y_min = (pack->y + (pack->h * 0.5f)) -
             PACK_FONT_SIZE * PIX_SIZE * 0.5f;
-        x_max = x_min + PACK_FONT_SIZE;
-        y_max = y_min + PACK_FONT_SIZE;
+        x_max = x_min + PACK_FONT_SIZE * PIX_SIZE;
+        y_max = y_min + PACK_FONT_SIZE * PIX_SIZE;
 
-        drawtext(&seg->vbo, pack->name, x_min, x_max, y_min, y_max);
+        drawtext(vbo, &seg->textcolors, pack->name,
+                PACK_FONT_SIZE, x_min, x_max, y_min, y_max);
                 
         /* Pin Text */
         x_min = (pack->x + 6 * PIX_SIZE);
         x_max = x_min + PIN_FONT_SIZE;
         y_min = (pack->y + pack->h) - 0.5f -
             PIN_FONT_SIZE * PIX_SIZE * 0.5f;
-        y_max = y_min + PIN_FONT_SIZE;
+        y_max = y_min + PIN_FONT_SIZE * PIX_SIZE;
 
         for (i = 0; i < pack->in_pins.size; i++) {
             pin = dlistat(&pack->in_pins, i);
             len = strlen(pin->name);
 
-            drawtext(&seg->vbo, pack->name, x_min, x_max, y_min, y_max);
+            drawtext(vbo, &seg->textcolors, pin->name,
+                    PIN_FONT_SIZE, x_min, x_max, y_min, y_max);
 
             y_min -= 1.0f;
             y_max -= 1.0f;
         }
         y_min = (pack->y + pack->h) - 0.5f -
             PIN_FONT_SIZE * PIX_SIZE * 0.5f;
-        y_max = y_min + PIN_FONT_SIZE;
+        y_max = y_min + PIN_FONT_SIZE * PIX_SIZE;
 
         for (i = 0; i < pack->out_pins.size; i++) {
             pin = dlistat(&pack->in_pins, i);
             len = strlen(pin->name);
-            
-            drawtext(&seg->vbo, pack->name, x_min, x_max, y_min, y_max);
 
             x_min = (pack->x + pack->w) - 6 * PIX_SIZE -
                 ((PIN_FONT_SIZE + FONT_GAP) * len - FONT_GAP) * PIX_SIZE;
-            x_max = x_min + PIN_FONT_SIZE;
+            x_max = x_min + PIN_FONT_SIZE * PIX_SIZE;
+            
+            drawtext(vbo, &seg->textcolors, pin->name,
+                    PIN_FONT_SIZE, x_min, x_max, y_min, y_max);
+
             y_min -= 1.0f;
             y_max -= 1.0f;
         }
+        vbufbind(vbo);
+        vbufbindvbo(vbo, &seg->textcolors);
     }
 }
 
 void
-drawtext(VBuffer *vbo, const char *text,
+drawtext(VBuffer *vbo, VecList *colors, const char *text, uint fontsize,
         float x_min, float x_max, float y_min, float y_max)
 {
     uint i, len, idxcount;
@@ -892,29 +1194,32 @@ drawtext(VBuffer *vbo, const char *text,
         uv[0] = fonttex.uvs[chr][0];
         uv[1] = fonttex.uvs[chr][1];
         vbufaddvertex(vbo, vert, uv, norm);
+        veclistpush(colors, packtextcolor);
 
         vert[0] = x_min;
         vert[1] = y_min;
         uv[0] = fonttex.uvs[chr][2];
         uv[1] = fonttex.uvs[chr][3];
         vbufaddvertex(vbo, vert, uv, norm);
+        veclistpush(colors, packtextcolor);
 
         vert[0] = x_min;
         vert[1] = y_max;
         uv[0] = fonttex.uvs[chr][4];
         uv[1] = fonttex.uvs[chr][5];
         vbufaddvertex(vbo, vert, uv, norm);
+        veclistpush(colors, packtextcolor);
 
         vert[0] = x_max;
         vert[1] = y_max;
         uv[0] = fonttex.uvs[chr][6];
         uv[1] = fonttex.uvs[chr][7];
         vbufaddvertex(vbo, vert, uv, norm);
+        veclistpush(colors, packtextcolor);
 
-        x_min += PACK_FONT_SIZE + FONT_GAP * PIX_SIZE;
-        x_max += PACK_FONT_SIZE + FONT_GAP * PIX_SIZE;
+        x_min += (fontsize + FONT_GAP) * PIX_SIZE;
+        x_max += (fontsize + FONT_GAP) * PIX_SIZE;
 
-        vbufaddvertex(vbo, vert, uv, norm);
         SET_INDEX(index, idxcount, 0, 1, 2);
         vbufaddindex(vbo, index);
         SET_INDEX(index, idxcount, 2, 3, 0);
@@ -1075,28 +1380,83 @@ guibuttonmouseup(GUIElement *elem, ...)
 void
 guibuttonnotdown(GUIElement *elem, ...)
 {
+    Camera *cam;
+    FreeSegment *seg;
+    int mx, my;
+
     guisetbacktexture(elem, 384, 0, 64, 64);
+
+    if (mousemode == MOUSE_NONE) {
+        mousegetstate(&mx, &my);
+        cam = getmaincamera();
+        mx = cam->ent.x + (mx - (cam->width / 2.0)) / (cam->zoom / 2.0);
+        my = cam->ent.y + (my - (cam->height / 2.0)) / (cam->zoom / 2.0);
+        seg = malloc(sizeof(FreeSegment));
+        freeseginit(seg, mx, my, GATE_NOT_W, GATE_NOT_H);
+        mouseseg = seg;
+    }
     elem->layer->dirty = 1;
 }
 
 void
 guibuttonordown(GUIElement *elem, ...)
 {
+    Camera *cam;
+    FreeSegment *seg;
+    int mx, my;
+
     guisetbacktexture(elem, 384, 0, 64, 64);
+
+    if (mousemode == MOUSE_NONE) {
+        mousegetstate(&mx, &my);
+        cam = getmaincamera();
+        mx = cam->ent.x + (mx - (cam->width / 2.0)) / (cam->zoom / 2.0);
+        my = cam->ent.y + (my - (cam->height / 2.0)) / (cam->zoom / 2.0);
+        seg = malloc(sizeof(FreeSegment));
+        freeseginit(seg, mx, my, GATE_OR_W, GATE_OR_H);
+        mouseseg = seg;
+    }
     elem->layer->dirty = 1;
 }
 
 void
 guibuttonanddown(GUIElement *elem, ...)
-{
+{   
+    Camera *cam;
+    FreeSegment *seg;
+    int mx, my;
+
     guisetbacktexture(elem, 384, 0, 64, 64);
+
+    if (mousemode == MOUSE_NONE) {
+        mousegetstate(&mx, &my);
+        cam = getmaincamera();
+        mx = cam->ent.x + (mx - (cam->width / 2.0)) / (cam->zoom / 2.0);
+        my = cam->ent.y + (my - (cam->height / 2.0)) / (cam->zoom / 2.0);
+        seg = malloc(sizeof(FreeSegment));
+        freeseginit(seg, mx, my, GATE_AND_W, GATE_AND_H);
+        mouseseg = seg;
+    }
     elem->layer->dirty = 1;
 }
 
 void
 guibuttonxordown(GUIElement *elem, ...)
-{
+{    Camera *cam;
+    FreeSegment *seg;
+    int mx, my;
+
     guisetbacktexture(elem, 384, 0, 64, 64);
+
+    if (mousemode == MOUSE_NONE) {
+        mousegetstate(&mx, &my);
+        cam = getmaincamera();
+        mx = cam->ent.x + (mx - (cam->width / 2.0)) / (cam->zoom / 2.0);
+        my = cam->ent.y + (my - (cam->height / 2.0)) / (cam->zoom / 2.0);
+        seg = malloc(sizeof(FreeSegment));
+        freeseginit(seg, mx, my, GATE_XOR_W, GATE_XOR_H);
+        mouseseg = seg;
+    }
     elem->layer->dirty = 1;
 }
 

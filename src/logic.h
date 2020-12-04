@@ -15,6 +15,15 @@
 #include "util/list.h"
 #include "util/htable.h"
 
+#define GATE_NOT_W  1
+#define GATE_NOT_H  1
+#define GATE_OR_W   1
+#define GATE_OR_H   2
+#define GATE_AND_W  2
+#define GATE_AND_H  2
+#define GATE_XOR_W  1
+#define GATE_XOR_H  2
+
 enum wire_flags {
     WIRE_ACTIVE  = BIT(0),
     WIRE_CHANGED = BIT(1)
@@ -82,7 +91,7 @@ Package * packcreate(uint type, const char *path);
 void packdelete(Package *pack);
 void packload(Package *pack, const char *path);
 
-void pininit(Pin *pin, uint x, uint y, const char *name);
+void pininit(Pin *pin, int x, int y, const char *name);
 void pindelete(Pin *pin);
 void pingetsig(Pin *pin);
 void pinputsig(Pin *pin);

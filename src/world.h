@@ -26,9 +26,9 @@
 #define WIRE_PERM_COUNT     16
 #define PACK_MAX_SIZE       64
 #define PIX_SIZE            0.015625f
-#define FONT_GAP            1
+#define FONT_GAP            0
 #define PACK_FONT_SIZE      16
-#define PIN_FONT_SIZE       8
+#define PIN_FONT_SIZE       12
 
 enum layer_type {
     LAYER_RED,
@@ -101,9 +101,11 @@ typedef struct Layer {
 typedef struct FreeSegment {
     float x, y;
     uint w, h;
-    VBuffer vbo;
+    //VBuffer vbo;
     VBuffer wirevbo;
+    VBuffer textvbo;
     VecList colors;
+    VecList textcolors;
     mat4 modelmat;
     Tile *tiles[LAYER_TOTAL];   //Size based on layer dimensions
     List *packs;
@@ -113,7 +115,9 @@ typedef struct Segment {
     int x, y, dirty;
     VBuffer vbo;
     VBuffer wirevbo;
+    VBuffer textvbo;
     VecList colors;
+    VecList textcolors;
     mat4 modelmat;
     Layer layers[LAYER_TOTAL];
     List *packs;
@@ -130,10 +134,12 @@ typedef struct SelectBox {
 
 void worldinit(World *world);
 void worldpush(World *world);
+World * worldtop(void);
 void worldpop(void);
 void worldhandle(World *world, Event *e);
 void worldupdate(World *world, float dt);
 void worldrender(World *world, Camera *cam);
+void worldrendermouseseg(Camera *cam);
 void worlddelete(World *world);
 
 void worldsave(const char *path);
