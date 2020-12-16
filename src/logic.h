@@ -17,11 +17,11 @@
 
 #define GATE_NOT_W  1
 #define GATE_NOT_H  1
-#define GATE_OR_W   1
+#define GATE_OR_W   2
 #define GATE_OR_H   2
 #define GATE_AND_W  2
 #define GATE_AND_H  2
-#define GATE_XOR_W  1
+#define GATE_XOR_W  2
 #define GATE_XOR_H  2
 
 enum wire_flags {
@@ -79,7 +79,6 @@ typedef struct Package {
     DList in_pins;  /* Pin */
     DList out_pins; /* Pin */
 } Package;
-
 
 Wire * wirecreate(void);
 void wiredelete(Wire *);

@@ -25,10 +25,12 @@
 #define TILE_WIREGAP        0.2f
 #define WIRE_PERM_COUNT     16
 #define PACK_MAX_SIZE       64
+
 #define PIX_SIZE            0.015625f
 #define FONT_GAP            0
 #define PACK_FONT_SIZE      16
 #define PIN_FONT_SIZE       12
+#define SELBOX_THICKNESS    2
 
 enum layer_type {
     LAYER_RED,
@@ -128,8 +130,10 @@ typedef struct World {
 } World;
 
 typedef struct SelectBox {
-    float x, y, w, h;
+    int x, y, w, h;
     int enabled;
+    VBuffer vbo;
+    mat4 modelmat;
 } SelectBox;
 
 void worldinit(World *world);

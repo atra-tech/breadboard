@@ -48,7 +48,6 @@ simstateinit(void)
     camerabindtoentity(camera, &player.ent);
 
     //TODO: Create world (or load from file)
-    //
 }
 
 void
@@ -130,8 +129,8 @@ simupdate(float dt)
 void
 simrender(void)
 {
-    /*glClearColor(0.784f, 0.761f, 0.725f, 1.0f);*/
-    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+    glClearColor(0.784f, 0.761f, 0.725f, 1.0f);
+    //glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
 
     //worldrender(world, camera);
@@ -139,6 +138,7 @@ simrender(void)
      *  Render wire layers */
     worldrender(world, camera);
     guirender();
+    worldrendermouseseg(camera);
 }
 
 void

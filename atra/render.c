@@ -308,44 +308,44 @@ shaderloadfloat(uint loc, float data)
 }
 
 void
-shaderloadvec2(uint loc, vec2 vec)
+shaderloadvec2(uint loc, const vec2 vec)
 {
     glUniform2f(loc, vec[0], vec[1]);
 }
 
 void
-shaderloadvec3(uint loc, vec3 vec)
+shaderloadvec3(uint loc, const vec3 vec)
 {
     glUniform3f(loc, vec[0], vec[1], vec[2]);
 }
 
 void
-shaderloadvec4(uint loc, vec4 vec)
+shaderloadvec4(uint loc, const vec4 vec)
 {
 
     glUniform4f(loc, vec[0], vec[1], vec[2], vec[3]);
 }
 
 void
-shaderloadmat4(uint loc, mat4 mat)
+shaderloadmat4(uint loc, const mat4 mat)
 {
     glUniformMatrix4fv(loc, 1, GL_FALSE, mat[0]);
 }
 
 void
-shaderloadprojviewmat(Shader *shader, mat4 matrix)
+shaderloadprojviewmat(Shader *shader, const mat4 matrix)
 {
     shaderloadmat4(shader->projviewmat, matrix);
 }
 
 void
-shaderloadmodelmat(Shader *shader, mat4 matrix)
+shaderloadmodelmat(Shader *shader, const mat4 matrix)
 {
     shaderloadmat4(shader->modelmat, matrix);
 }
 
 void
-shaderloadviewmat(Shader *shader, mat4 matrix)
+shaderloadviewmat(Shader *shader, const mat4 matrix)
 {
     shaderloadmat4(shader->viewmat, matrix);
 }
@@ -365,28 +365,28 @@ shaderaddfloat(Shader *shader, const char *name, float data)
 }
 
 void
-shaderaddvec2(Shader *shader, const char *name, vec2 vec)
+shaderaddvec2(Shader *shader, const char *name, const vec2 vec)
 {
     uint loc = glGetUniformLocation(shader->prog, name);
     shaderloadvec2(loc, vec);
 }
 
 void
-shaderaddvec3(Shader *shader, const char *name, vec3 vec)
+shaderaddvec3(Shader *shader, const char *name, const vec3 vec)
 {
     uint loc = glGetUniformLocation(shader->prog, name);
     shaderloadvec3(loc, vec);
 }
 
 void
-shaderaddvec4(Shader *shader, const char *name, vec4 vec)
+shaderaddvec4(Shader *shader, const char *name, const vec4 vec)
 {
     uint loc = glGetUniformLocation(shader->prog, name);
     shaderloadvec4(loc, vec);
 }
 
 void
-shaderaddmat4(Shader *shader, const char *name, mat4 mat)
+shaderaddmat4(Shader *shader, const char *name, const mat4 mat)
 {
     uint loc = glGetUniformLocation(shader->prog, name);
     shaderloadmat4(loc, mat);
