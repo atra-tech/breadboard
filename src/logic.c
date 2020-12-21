@@ -81,14 +81,15 @@ packdelete(Package *pack)
     uint i;
 
     if (pack->circuit) {
-        //Free circuit
-        //circuitdelete(pack->circuit);
-
+        circuitdelete(pack->circuit);
     }
 
     for (i = 0; i < pack->in_pins.size; i++) {
         pindelete(dlistat(&pack->in_pins, i));
+    }
 
+    for (i = 0; i < pack->out_pins.size; i++) {
+        pindelete(dlistat(&pack->out_pins, i));
     }
 }
 
@@ -258,7 +259,7 @@ packinit_not(Package *pack)
     pininit(&pin, -1, 0, "A");
     dlistpush(&pack->in_pins, &pin);
     
-    pininit(&pin, 1, 0, "!A");
+    pininit(&pin, GATE_NOT_W, 0, "!A");
     dlistpush(&pack->out_pins, &pin);
 }
 
@@ -279,10 +280,10 @@ packinit_or(Package *pack)
     pininit(&pin, -1, 0, "B");
     dlistpush(&pack->in_pins, &pin);
     
-    pininit(&pin, 1, 1, "Q");
+    pininit(&pin, GATE_OR_W, 1, "Q");
     dlistpush(&pack->out_pins, &pin);
 
-    pininit(&pin, 1, 0, "!Q");
+    pininit(&pin, GATE_OR_W, 0, "!Q");
     dlistpush(&pack->out_pins, &pin);
 }
 
@@ -303,10 +304,10 @@ packinit_and(Package *pack)
     pininit(&pin, -1, 0, "B");
     dlistpush(&pack->in_pins, &pin);
     
-    pininit(&pin, 2, 1, "Q");
+    pininit(&pin, GATE_AND_W, 1, "Q");
     dlistpush(&pack->out_pins, &pin);
 
-    pininit(&pin, 2, 0, "!Q");
+    pininit(&pin, GATE_AND_W, 0, "!Q");
     dlistpush(&pack->out_pins, &pin);
 }
 
@@ -327,10 +328,10 @@ packinit_xor(Package *pack)
     pininit(&pin, -1, 0, "B");
     dlistpush(&pack->in_pins, &pin);
     
-    pininit(&pin, 1, 1, "Q");
+    pininit(&pin, GATE_XOR_W, 1, "Q");
     dlistpush(&pack->out_pins, &pin);
 
-    pininit(&pin, 1, 0, "!Q");
+    pininit(&pin, GATE_XOR_W, 0, "!Q");
     dlistpush(&pack->out_pins, &pin);
 }
 

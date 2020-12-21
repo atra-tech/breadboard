@@ -21,6 +21,7 @@
 #define SEGMENTS_PER_ROW    WORLD_SIZE / SEGMENT_SIZE
 #define SEGMENT_COUNT       SEGMENTS_PER_ROW * SEGMENTS_PER_ROW
 #define LAYER_TILECOUNT     SEGMENT_SIZE * SEGMENT_SIZE
+#define WORLD_TILES_PER_ROW SEGMENTS_PER_ROW * SEGMENT_SIZE
 #define VIEW_DIST           4
 #define TILE_WIREGAP        0.2f
 #define WIRE_PERM_COUNT     16
@@ -67,8 +68,9 @@ enum mouse_mode {
     MOUSE_NONE,
     MOUSE_DRAW,
     MOUSE_ERASE,
-    MOUSE_GRAB,
-    MOUSE_DRAGBOX
+    MOUSE_GRAB,     /* Holding free segment */
+    MOUSE_DRAGBOX,  /* Draw selection box */
+    MOUSE_BOXREADY, /* Selection box ready */
 };
 
 enum pack_textures {
@@ -81,6 +83,13 @@ enum pack_textures {
     PACKTEX_BOT_LEFT,
     PACKTEX_BOT,
     PACKTEX_BOT_RIGHT,
+    PACKTEX_1W_BOT,
+    PACKTEX_1W_CENTRE,
+    PACKTEX_1W_TOP,
+    PACKTEX_1H_LEFT,
+    PACKTEX_1H_CENTRE,
+    PACKTEX_1H_RIGHT,
+    PACKTEX_1W_1H,
     PACKTEX_TOTAL
 };
 
@@ -103,6 +112,7 @@ typedef struct Layer {
 typedef struct FreeSegment {
     float x, y;
     uint w, h;
+    float prev_x, prev_y;
     //VBuffer vbo;
     VBuffer wirevbo;
     VBuffer textvbo;

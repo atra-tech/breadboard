@@ -78,7 +78,8 @@ simhandle(void)
         SDL_StartTextInput();
         player.locked = 1;
     }
-
+    SDL_PumpEvents();
+    
     while (SDL_PollEvent(&e)) {
         if (e.type == SDL_QUIT) {
             // TODO: Add quit confirmation dialog
@@ -122,6 +123,7 @@ simupdate(float dt)
 {
     playerupdate(&player, dt);
     cameraupdate(camera);
+    worldupdate(world, dt);
 
     guiupdate(dt);
 }

@@ -15,7 +15,7 @@
 #include "util/list.h"
 #include "util/htable.h"
 
-#define GATE_NOT_W  1
+#define GATE_NOT_W  2
 #define GATE_NOT_H  1
 #define GATE_OR_W   2
 #define GATE_OR_H   2

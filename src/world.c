@@ -33,7 +33,7 @@ static void freeseginit(FreeSegment *seg, float x, float y, uint w, uint h);
 static void freesegdelete(FreeSegment *seg);
 static void freesegmesh(FreeSegment *seg);
 static FreeSegment * freesegbuild(uint x, uint y, uint w, uint h, uint clearsrc);
-static void freesegmerge(FreeSegment *seg, uint x, uint y);
+static int freesegmerge(FreeSegment *seg, int x, int y);
 static void tilehandlemouse(Tile *tile, float mx, float my);
 static void layermesh(Segment *seg, Layer *layer, const float *color, uint depth);
 static void wirecalcuvs(void);
@@ -43,6 +43,11 @@ static void fullremesh(void);
 static void selboxinit(SelectBox *box);
 static void selboxmesh(SelectBox *box);
 static void selboxdelete(SelectBox *box);
+static void calcpackuvs(Package *pack, uint x, uint y, float **uvs);
+static int pointintersectsquad(float px, float py,
+        float x, float y, float w, float h);
+static int quadintersectsquad(float ax, float ay, float aw, float ah,
+        float bx, float by, float bw, float bh);
 static void drawtext(VBuffer *vbo, VecList *colors, const char *text,
         uint fontsize, float x_min, float x_max, float y_min, float y_max);
 static void vbopushquad(VBuffer *vbo, float x_min, float y_min,
@@ -166,6 +171,13 @@ worldstart(void)
             texget(&circuittex, j, i, packuvs + (j + i * 3) * 8);
         }
     }
+    texget(&circuittex, 3, 0, packuvs + PACKTEX_1W_TOP * 8);
+    texget(&circuittex, 3, 1, packuvs + PACKTEX_1W_CENTRE * 8);
+    texget(&circuittex, 3, 2, packuvs + PACKTEX_1W_BOT * 8);
+    texget(&circuittex, 4, 0, packuvs + PACKTEX_1H_LEFT * 8);
+    texget(&circuittex, 5, 0, packuvs + PACKTEX_1H_CENTRE * 8);
+    texget(&circuittex, 6, 0, packuvs + PACKTEX_1H_RIGHT * 8);
+    texget(&circuittex, 4, 1, packuvs + PACKTEX_1W_1H * 8);
 
     /* Populate pin package texture UVs */
     for (i = 0; i < PINTEX_TOTAL; i++) {
@@ -340,6 +352,7 @@ freesegdelete(FreeSegment *seg)
     for (i = 0; i < LAYER_TOTAL; i++) {
         free(seg->tiles[i]);
     }
+    free(seg);
 }
 
 void
@@ -363,41 +376,52 @@ void
 worldhandle(World *world, Event *e)
 {
     static int prev_mx = 0, prev_my = 0;
-    int w, h, mx, my, diff_mx, diff_my;
-    float mdist, tmp_mx, tmp_my, wmx, wmy;
+    int mx, my;
+    float wmx, wmy;
     uint mstate;
     Camera *cam;
-    Tile *tile;
-    Segment *seg;
 
     mstate = mousegetstate(&mx, &my);
     cam = getmaincamera();
 
-    /*  TODO:   Any interaction with anything other than the currently active
-     *          FreeSegment selection will rebind the contained elements to
-     *          the world and delete it. */
-    
     wmx = cam->ent.x + (mx - (cam->width / 2.0f)) / (cam->zoom / 2.0f);
     wmy = cam->ent.y + ((cam->height - my) - (cam->height / 2.0f)) / (cam->zoom / 2.0f);
 
     if (e->type == SDL_MOUSEBUTTONDOWN) {
         if (e->button.button == SDL_BUTTON_LEFT) {
-            //  Possible paths:
-            //      1.  Player does not drag mouse, leading to single IC or select-box selection check
-            //      2.  Player drags mouse activating select-box mode.
-            //      3.  Player clicks on open area with wires enabled, drawing wires on tiles.
-
-
             //TODO: Check for selection box under cursor
             //Check for IC pack under cursor
-            //If either are true, skip the following mousemode changes
 
+            /* TODO: What is this currentwire check for?  Move it */
             if (currentwire != WIRE_NONE) {
                 mousemode = MOUSE_DRAW;
             } else if (mousemode == MOUSE_GRAB) {
-                /* TODO: Ensure segment is within bounds */
-                freesegmerge(mouseseg, wmx - 0.5f, wmy - 0.5f); 
-            } else {
+                if (freesegmerge(mouseseg, wmx - 0.5f, wmy - 0.5f)) {
+                    freesegdelete(mouseseg);
+                    mouseseg = NULL;
+                    mousemode = MOUSE_NONE;
+                } else {
+                    /* TODO: Indicate placement error in some way
+                     *       (Do it inside freesegmerge, maybe?)
+                     *          Floating tooltip following mouse?
+                     *          Highlight offending element in red for a time? */
+                }
+            } else if (mousemode == MOUSE_BOXREADY) {
+                if (pointintersectsquad(wmx, wmy,
+                            selbox.x, selbox.y, selbox.w, selbox.h)) {
+                    
+                    mouseseg = freesegbuild(
+                            selbox.x, selbox.y, selbox.w, selbox.h, 1);
+                    if (mouseseg) {
+                        freesegmesh(mouseseg);
+                        mousemode = MOUSE_GRAB;
+                        selbox.enabled = 0;
+                    }
+                } else {
+                    mousemode = MOUSE_NONE;
+                    selbox.enabled = 0;
+                }
+            } else if (mousemode == MOUSE_NONE) {
                 mousemode = MOUSE_DRAGBOX;
                 selbox.x = wmx + 0.5f;
                 selbox.y = wmy + 0.5f;
@@ -415,14 +439,17 @@ worldhandle(World *world, Event *e)
     } else if (e->type == SDL_MOUSEBUTTONUP) {
         if (e->button.button == SDL_BUTTON_LEFT) {
             if (mousemode == MOUSE_DRAGBOX) {
-                //Construct FreeSegment with all captured wires and ICs
-                //Remove wires and ICs from world segment
-                mousemode = MOUSE_NONE;
+                if (selbox.w < 0) {
+                    selbox.x += selbox.w;
+                    selbox.w = abs(selbox.w);
+                }
+                if (selbox.h < 0) {
+                    selbox.y += selbox.h;
+                    selbox.h = abs(selbox.h);
+                }
+                mousemode = MOUSE_BOXREADY;
             } else if (mousemode == MOUSE_DRAW) {
                 mousemode = MOUSE_NONE;
-            } else if (mousemode == MOUSE_DRAGBOX) {
-                mousemode = MOUSE_NONE;
-                selbox.enabled = 0;
             }
         } else if (e->button.button == SDL_BUTTON_RIGHT) {
             if (mousemode == MOUSE_ERASE) {
@@ -433,6 +460,18 @@ worldhandle(World *world, Event *e)
         if (mousemode == MOUSE_DRAGBOX) {
             selbox.w = wmx - selbox.x;
             selbox.h = wmy - selbox.y;
+            
+            if (selbox.x + selbox.w < 0) {
+                selbox.w = 0;
+            } else if (selbox.x + selbox.w >= WORLD_TILES_PER_ROW) {
+                selbox.w = WORLD_TILES_PER_ROW - 1;
+            }
+
+            if (selbox.y + selbox.h < 0) {
+                selbox.h = 0;
+            } else if (selbox.y + selbox.h >= WORLD_TILES_PER_ROW) {
+                selbox.h = WORLD_TILES_PER_ROW - 1;
+            }
 
             selboxmesh(&selbox);
         }
@@ -443,24 +482,14 @@ worldhandle(World *world, Event *e)
         mousemode = MOUSE_NONE;
     } else if (!(mstate & MOUSE_BUTTON(RIGHT)) && mousemode == MOUSE_ERASE) {
         mousemode = MOUSE_NONE;
-    } else if (!(mstate & MOUSE_BUTTON(LEFT)) && mousemode == MOUSE_DRAGBOX) {
+    } /*else if (!(mstate & MOUSE_BUTTON(LEFT)) && mousemode == MOUSE_DRAGBOX) {
         mousemode = MOUSE_NONE;
         selbox.enabled = 0;
-    }
-
-    /*if (mousemode == MOUSE_DRAG) {
-        diff_mx = mx - prev_mx;
-        diff_my = my - prev_my;
-        mdist = diff_mx * diff_mx + diff_my * diff_my;
-
-        if (mdist > 1.0) {
-            mousemode = MOUSE_DRAGBOX;
-        }
     }*/
 
     /*  Check if wire buttons are enabled
      *  If any are enabled, place wire at current mouse position */
-    if (mousemode == MOUSE_DRAW || mousemode == MOUSE_ERASE) {
+    /*if (mousemode == MOUSE_DRAW || mousemode == MOUSE_ERASE) {
         my = cam->height - my;
         tmp_mx = cam->ent.x + (mx - (cam->width / 2.0)) / (cam->zoom / 2.0);
         tmp_my = cam->ent.y + (my - (cam->height / 2.0)) / (cam->zoom / 2.0);
@@ -469,7 +498,7 @@ worldhandle(World *world, Event *e)
         tile = worldgettileat(world, tmp_mx, tmp_my, currentwire);
         tilehandlemouse(tile, tmp_mx, tmp_my);
         seg->dirty = 1;
-    } else if (mousemode == MOUSE_GRAB) {
+    } else if (mousemode == MOUSE_GRAB && mouseseg) {
         my = cam->height - my;
         tmp_mx = cam->ent.x + (mx - (cam->width / 2.0)) / (cam->zoom / 2.0);
         tmp_my = cam->ent.y + (my - (cam->height / 2.0)) / (cam->zoom / 2.0);
@@ -477,7 +506,7 @@ worldhandle(World *world, Event *e)
         glm_mat4_identity(mouseseg->modelmat);
         glm_translate_x(mouseseg->modelmat, tmp_mx - 1.0f);
         glm_translate_y(mouseseg->modelmat, tmp_my - 1.0f);
-    }
+    }*/
     prev_mx = mx;
     prev_my = my;
 }
@@ -551,7 +580,32 @@ tilehandlemouse(Tile *tile, float mx, float my)
 void
 worldupdate(World *world, float dt)
 {
-    
+    int mx, my;
+    float tmp_mx, tmp_my;
+    Camera *cam = getmaincamera();
+    Segment *seg;
+    Tile *tile;
+
+    mousegetstate(&mx, &my);
+
+    if (mousemode == MOUSE_DRAW || mousemode == MOUSE_ERASE) {
+        my = cam->height - my;
+        tmp_mx = cam->ent.x + (mx - (cam->width / 2.0)) / (cam->zoom / 2.0);
+        tmp_my = cam->ent.y + (my - (cam->height / 2.0)) / (cam->zoom / 2.0);
+
+        seg = worldgetsegmentat(world, tmp_mx, tmp_my);
+        tile = worldgettileat(world, tmp_mx, tmp_my, currentwire);
+        tilehandlemouse(tile, tmp_mx, tmp_my);
+        seg->dirty = 1;
+    } else if (mousemode == MOUSE_GRAB && mouseseg) {
+        my = cam->height - my;
+        tmp_mx = cam->ent.x + (mx - (cam->width / 2.0)) / (cam->zoom / 2.0);
+        tmp_my = cam->ent.y + (my - (cam->height / 2.0)) / (cam->zoom / 2.0);
+
+        glm_mat4_identity(mouseseg->modelmat);
+        glm_translate_x(mouseseg->modelmat, tmp_mx - 1.0f);
+        glm_translate_y(mouseseg->modelmat, tmp_my - 1.0f);
+    }
 }
 
 void
@@ -631,9 +685,9 @@ worldrender(World *world, Camera *cam)
             seg = worldgetsegment(world, i, j);
 
             vbufbindvao(&seg->textvbo);
-            shaderloadmodelmat(&bgshader, seg->modelmat);
+            shaderloadmodelmat(&worldshader, seg->modelmat);
             glDrawElements(GL_TRIANGLES,
-                    seg->wirevbo.indxcount, GL_UNSIGNED_INT, NULL);
+                    seg->textvbo.indxcount, GL_UNSIGNED_INT, NULL);
         }
     }
 
@@ -721,16 +775,16 @@ segmentmesh(Segment *seg)
     float *uvptr;
     VBuffer *vbo;
 
-    /* Draw background */
-    idxcount = 0;
-    vbo = &seg->vbo;
-
     vbufreset(&seg->vbo);
     vbufreset(&seg->wirevbo);
     vbufreset(&seg->textvbo);
     veclistclear(&seg->colors);
     veclistclear(&seg->textcolors);
     
+    /* Draw background */
+    idxcount = 0;
+    vbo = &seg->vbo;
+
     for (i = 0; i < 4; i++) {
         COPY_VEC(vert, segmentverts, i, 3);
         COPY_VEC(uv, segmentuvs, i, 2);
@@ -745,64 +799,27 @@ segmentmesh(Segment *seg)
     idxcount += 4;
     vbo->indxcount += 12;
     
-    vbufbind(vbo);
-
     /* Draw wires */
     layermesh(seg, &seg->layers[wireorder[2]], colors[wireorder[2]], 1);
     layermesh(seg, &seg->layers[wireorder[1]], colors[wireorder[1]], 2);
     layermesh(seg, &seg->layers[wireorder[0]], colors[wireorder[0]], 3);
     
-    vbo = &seg->wirevbo;
-    idxcount = vbo->indxcount / 3;
     
     /* Draw packages */
     for (l = 0; l < seg->packs->size; l++) {
 
+        vbo = &seg->wirevbo;
+        idxcount = vbo->indxcount / 3;
         pack = listat(seg->packs, l);
 
         /* Draw body */
         for (y = 0; y < pack->h; y++) {
             for (x = 0; x < pack->w; x++) {
-
-                /* TODO: Find flat, branchless means of doing this */ 
-                if (x == 0) {
-                    if (y == 0) {
-                        //  BOTTOM-LEFT
-                        uvptr = packuvs + 6 * 8;
-                    } else if (y == pack->h - 1) {
-                        //  TOP-LEFT
-                        uvptr = packuvs + 0 * 8;
-                    } else {
-                        //  LEFT
-                        uvptr = packuvs + 3 * 8;
-                    }
-                } else if (x == pack->w - 1) {
-                    if (y == 0) {
-                        //  BOTTOM-RIGHT
-                        uvptr = packuvs + 8 * 8;
-                    } else if (y == pack->h - 1) {
-                        //  TOP-RIGHT
-                        uvptr = packuvs + 2 * 8;
-                    } else {
-                        //  RIGHT
-                        uvptr = packuvs + 5 * 8;
-                    }
-                } else {
-                    if (y == 0) {
-                        //  BOTTOM
-                        uvptr = packuvs + 7 * 8;
-                    } else if (y == pack->h - 1) {
-                        //  TOP
-                        uvptr = packuvs + 1 * 8;
-                    } else {
-                        //  CENTRE
-                        uvptr = packuvs + 4 * 8;
-                    }
-                }
+                calcpackuvs(pack, x, y, &uvptr);
 
                 for (i = 0; i < 4; i++) {
-                    vert[0] = x + tileverts[i * 3 + 0];
-                    vert[1] = y + tileverts[i * 3 + 1];
+                    vert[0] = (int)pack->x + x + tileverts[i * 3 + 0];
+                    vert[1] = (int)pack->y + y + tileverts[i * 3 + 1];
                     uv[0] = uvptr[i * 2 + 0];
                     uv[1] = uvptr[i * 2 + 1];
                     vbufaddvertex(vbo, vert, uv, norm);
@@ -848,7 +865,7 @@ segmentmesh(Segment *seg)
             vbufaddindex(vbo, index);
             
             idxcount += 4;
-            seg->vbo.indxcount += 12;
+            vbo->indxcount += 12;
         }
         for (i = 0; i < pack->out_pins.size; i++) {
             pin = dlistat(&pack->out_pins, i);
@@ -881,8 +898,6 @@ segmentmesh(Segment *seg)
             idxcount += 4;
             vbo->indxcount += 12;
         }
-        vbufbind(vbo);
-        vbufbindvbo(vbo, &seg->colors);
 
         /* Draw text */
         vbo = &seg->textvbo;
@@ -935,9 +950,12 @@ segmentmesh(Segment *seg)
             y_min -= 1.0f;
             y_max -= 1.0f;
         }
-        vbufbind(vbo);
-        vbufbindvbo(vbo, &seg->textcolors);
     }
+    vbufbind(&seg->vbo);
+    vbufbind(&seg->wirevbo);
+    vbufbindvbo(&seg->wirevbo, &seg->colors);
+    vbufbind(&seg->textvbo);
+    vbufbindvbo(&seg->textvbo, &seg->textcolors);
 }
 
 void
@@ -999,7 +1017,7 @@ layermesh(Segment *seg, Layer *layer, const float *color, uint depth)
 void
 freesegmesh(FreeSegment *seg)
 {
-    uint l, x, y, i, j, tile, tilenib, idxcount, color, len;
+    uint l, x, y, i, j, tile, tilenib, idxcount, layer, len;
     float x_min, x_max, y_min, y_max;
     vec3 vert, norm = {0.0f, 0.0f, 1.0f};
     vec2 uv;
@@ -1009,22 +1027,22 @@ freesegmesh(FreeSegment *seg)
     float *uvptr;
     VBuffer *vbo;
 
-    vbo = &seg->wirevbo;
-    idxcount = vbo->indxcount / 3;
-    
     vbufreset(&seg->wirevbo);
     vbufreset(&seg->textvbo);
     veclistclear(&seg->colors);
     veclistclear(&seg->textcolors);
+    
+    vbo = &seg->wirevbo;
+    idxcount = vbo->indxcount / 3;
 
     /* Draw wires */
     for (l = 0; l < LAYER_TOTAL; l++) {
-        color = wireorder[LAYER_TOTAL - 1 - l];
+        layer = wireorder[LAYER_TOTAL - 1 - l];
         vert[2] = l;
  
         for (x = 0; x < seg->w; x++) {
             for (y = 0; y < seg->h; y++) {
-                tile = seg->tiles[l][x * y].state & 0x1F;
+                tile = seg->tiles[layer][x * seg->h + y].state & 0x1F;
 
                 if (!tile) continue;
 
@@ -1035,7 +1053,7 @@ freesegmesh(FreeSegment *seg)
                         uv[0] = wireuvs[0][i * 2 + 0];
                         uv[1] = wireuvs[0][i * 2 + 1];
                         vbufaddvertex(vbo, vert, uv, norm);
-                        veclistpush(&seg->colors, colors[color]);
+                        veclistpush(&seg->colors, colors[layer]);
                     }
                     SET_INDEX(index, idxcount, 0, 1, 2);
                     vbufaddindex(vbo, index);
@@ -1043,7 +1061,7 @@ freesegmesh(FreeSegment *seg)
                     vbufaddindex(vbo, index);
 
                     idxcount += 4;
-                    seg->wirevbo.indxcount += 12;
+                    vbo->indxcount += 12;
                 } else {
                     tilenib = tile & 0xF;
 
@@ -1053,7 +1071,7 @@ freesegmesh(FreeSegment *seg)
                         uv[0] = wireuvs[tilenib][i * 2 + 0];
                         uv[1] = wireuvs[tilenib][i * 2 + 1];
                         vbufaddvertex(vbo, vert, uv, norm);
-                        veclistpush(&seg->colors, colors[color]);
+                        veclistpush(&seg->colors, colors[layer]);
                     }
                     SET_INDEX(index, idxcount, 0, 1, 2);
                     vbufaddindex(vbo, index);
@@ -1070,53 +1088,18 @@ freesegmesh(FreeSegment *seg)
     /* Draw packages */
     for (l = 0; l < seg->packs->size; l++) {
 
+        vbo = &seg->wirevbo;
+        idxcount = vbo->indxcount / 3;
         pack = listat(seg->packs, l);
 
         /* Draw body */
-        for (y = 0; y < pack->w; y++) {
-            for (x = 0; x < pack->h; x++) {
-
-                /* TODO: Find flat, branchless means of doing this
-                 *       At least use pointer arithmetic, memcpy here is bad. */
-                if (x == 0) {
-                    if (y == 0) {
-                        //  BOTTOM-LEFT
-                        uvptr = packuvs + 6 * 8;
-                    } else if (y == pack->h - 1) {
-                        //  TOP-LEFT
-                        uvptr = packuvs + 0 * 8;
-                    } else {
-                        //  LEFT
-                        uvptr = packuvs + 3 * 8;
-                    }
-                } else if (x == pack->w - 1) {
-                    if (y == 0) {
-                        //  BOTTOM-RIGHT
-                        uvptr = packuvs + 8 * 8;
-                    } else if (y == pack->h - 1) {
-                        //  TOP-RIGHT
-                        uvptr = packuvs + 2 * 8;
-                    } else {
-                        //  RIGHT
-                        uvptr = packuvs + 5 * 8;
-                    }
-                } else {
-                    if (y == 0) {
-                        //  BOTTOM
-                        uvptr = packuvs + 7 * 8;
-                    } else if (y == pack->h - 1) {
-                        //  TOP
-                        uvptr = packuvs + 1 * 8;
-                    } else {
-                        //  CENTRE
-                        uvptr = packuvs + 4 * 8;
-                    }
-                }
-
+        for (y = 0; y < pack->h; y++) {
+            for (x = 0; x < pack->w; x++) {
+               calcpackuvs(pack, x, y, &uvptr);
                 
                 for (i = 0; i < 4; i++) {
-                    vert[0] = x + tileverts[i * 3 + 0];
-                    vert[1] = y + tileverts[i * 3 + 1];
+                    vert[0] = (int)pack->x + x + tileverts[i * 3 + 0];
+                    vert[1] = (int)pack->y + y + tileverts[i * 3 + 1];
                     uv[0] = uvptr[i * 2 + 0];
                     uv[1] = uvptr[i * 2 + 1];
                     vbufaddvertex(vbo, vert, uv, norm);
@@ -1195,8 +1178,6 @@ freesegmesh(FreeSegment *seg)
             idxcount += 4;
             vbo->indxcount += 12;
         }
-        vbufbind(vbo);
-        vbufbindvbo(vbo, &seg->colors);
 
         /* Draw text */
         vbo = &seg->textvbo;
@@ -1249,9 +1230,66 @@ freesegmesh(FreeSegment *seg)
             y_min -= 1.0f;
             y_max -= 1.0f;
         }
-        vbufbind(vbo);
-        vbufbindvbo(vbo, &seg->textcolors);
     }
+    vbufbind(&seg->wirevbo);
+    vbufbindvbo(&seg->wirevbo, &seg->colors);
+    vbufbind(&seg->textvbo);
+    vbufbindvbo(&seg->textvbo, &seg->textcolors);
+}
+
+void
+calcpackuvs(Package *pack, uint x, uint y, float **uvs)
+{
+    uint texpos;
+
+    if (pack->w == 1) {
+        if (pack->h == 1) {
+            texpos = PACKTEX_1W_1H;
+        } else {
+            if (y == 0) {
+                texpos = PACKTEX_1W_BOT;
+            } else if (y == pack->h - 1) {
+                texpos = PACKTEX_1W_TOP;
+            } else {
+                texpos = PACKTEX_1W_CENTRE;
+            }
+        }
+    } else if (pack->h == 1) {
+        if (x == 0) {
+            texpos = PACKTEX_1H_LEFT;
+        } else if (x == pack->w - 1) {
+            texpos = PACKTEX_1H_RIGHT;
+        } else {
+            texpos = PACKTEX_1H_CENTRE;
+        }
+    } else {
+        if (x == 0) {
+            if (y == 0) {
+                texpos = PACKTEX_BOT_LEFT;
+            } else if (y == pack->h - 1) {
+                texpos = PACKTEX_TOP_LEFT;
+            } else {
+                texpos = PACKTEX_LEFT;
+            }
+        } else if (x == pack->w - 1) {
+            if (y == 0) {
+                texpos = PACKTEX_BOT_RIGHT;
+            } else if (y == pack->h - 1) {
+                texpos = PACKTEX_TOP_RIGHT;
+            } else {
+                texpos = PACKTEX_RIGHT;
+            }
+        } else {
+            if (y == 0) {
+                texpos = PACKTEX_BOT;
+            } else if (y == pack->h - 1) {
+                texpos = PACKTEX_TOP;
+            } else {
+                texpos = PACKTEX_CENTRE;
+            }
+        }
+    }
+    *uvs = packuvs + texpos * 8;
 }
 
 void
@@ -1487,24 +1525,29 @@ freesegbuild(uint x, uint y, uint w, uint h, uint clearsrc)
     FreeSegment *seg;
     Segment *tmpseg;
     Package *pack;
-    uint tile;
+    uint *tile;
 
-    seg = malloc(sizeof(FreeSegment));
+    seg = calloc(1, sizeof(FreeSegment));
     freeseginit(seg, 0.0f, 0.0f, w, h);
     
     /* Map wire tiles */
     for (l = 0; l < LAYER_TOTAL; l++) {
-        for (j = 0; j < h; j++) {
-            for (i = 0; i < w; i++) {
-                tile = worldgettileat(mainworld, x + i, y + j, l)->state;
-                seg->tiles[l][j * w + i].state = tile;
+        for (i = 0; i < w; i++) {
+            for (j = 0; j < h; j++) {
+                tile = &worldgettileat(mainworld, x + i, y + j, l)->state;
+                seg->tiles[l][j + i * h].state = *tile;
+                
+                if (clearsrc) {
+                    *tile = 0;
+                    worldgetsegmentat(mainworld, x + i, y + j)->dirty = 1;
+                }
             }
         }
     }
     
     /* Map packages */
-    for (i = x / SEGMENT_SIZE; i < (x + w) / SEGMENT_SIZE; i++) {
-        for (j = y / SEGMENT_SIZE; j < (y + h) / SEGMENT_SIZE; j++) {
+    for (i = x / SEGMENT_SIZE; i <= (x + w) / SEGMENT_SIZE; i++) {
+        for (j = y / SEGMENT_SIZE; j <= (y + h) / SEGMENT_SIZE; j++) {
             tmpseg = worldgetsegment(mainworld, i, j);
             
             for (l = 0; l < tmpseg->packs->size; l++) {
@@ -1516,37 +1559,71 @@ freesegbuild(uint x, uint y, uint w, uint h, uint clearsrc)
                 wy = pack->y + tmpseg->y * SEGMENT_SIZE;
                
                 /* Selection counts only when pack is entirely inside bounds */
-                if (x < wx && x + w > wx + pack->w &&
-                    y < wy && y + h > wy + pack->h) {
+                if (x <= wx && x + w >= wx + pack->w &&
+                    y <= wy && y + h >= wy + pack->h) {
                     pack->x = wx - x;
                     pack->y = wy - y;
                     listpushback(seg->packs, pack);
 
                     if (clearsrc) {
-                        listremove(tmpseg->packs, l);
+                        listremove(tmpseg->packs, l--);
+                    }
+                }
+            }
+            tmpseg->dirty = 1;
+        }
+    }
+    
+    return seg;
+}
+
+/* Copy free segment data into the currently active world */
+int
+freesegmerge(FreeSegment *seg, int x, int y)
+{
+    uint l, i, j, k, wx, wy;
+    uint tile;
+    Package *pack, *tmppack;
+    Segment *tmpseg;
+
+    /* Check bounds violations */
+    if (x < 0 || x + seg->w >= SEGMENTS_PER_ROW * SEGMENT_SIZE ||
+        y < 0 || y + seg->h >= SEGMENTS_PER_ROW * SEGMENT_SIZE) {
+        return 0;
+    }
+
+    /* Check for package overlaps */
+    for (l = 0; l < seg->packs->size; l++) {
+        pack = listat(seg->packs, l);
+
+
+        for (i = (x + pack->x) / SEGMENT_SIZE;
+                i <= (x + pack->x + pack->w) / SEGMENT_SIZE; i++) {
+            for (j = (y + pack->y) / SEGMENT_SIZE;
+                    j <= (y + pack->y + pack->h) / SEGMENT_SIZE; j++) {
+                tmpseg = worldgetsegment(mainworld, i, j);
+
+                for (k = 0; k < tmpseg->packs->size; k++) {
+                    tmppack = listat(tmpseg->packs, k);
+                    wx = tmppack->x + tmpseg->x * SEGMENT_SIZE;
+                    wy = tmppack->y + tmpseg->y * SEGMENT_SIZE;
+
+                    if (quadintersectsquad(
+                            x + pack->x, y + pack->y, pack->w, pack->h,
+                            wx, wy, tmppack->w, tmppack->h)) {
+                        return 0;
                     }
                 }
             }
         }
     }
 
-    return seg;
-}
-
-/* Copy free segment data into the currently active world */
-void
-freesegmerge(FreeSegment *seg, uint x, uint y)
-{
-    uint l, i, j, wx, wy;
-    uint tile;
-    Package *pack;
-    Segment *tmpseg;
-
     for (l = 0; l < LAYER_TOTAL; l++) {
-        for (j = 0; j < seg->h; j++) {
-            for (i = 0; i < seg->w; i++) {
-                tile = seg->tiles[l][j * seg->w + i].state;
-                worldgettileat(mainworld, x + i, y + j, l)->state = tile;
+        for (i = 0; i < seg->w; i++) {
+            for (j = 0; j < seg->h; j++) {
+                tile = seg->tiles[l][j + i * seg->h].state;
+                worldgettileat(mainworld, x + i, y + j, l)->state |= tile;
+                worldgetsegmentat(mainworld, x + i, y + j)->dirty = 1;
             }
         }
     }
@@ -1557,10 +1634,13 @@ freesegmerge(FreeSegment *seg, uint x, uint y)
         wy = y + pack->y;
         tmpseg = worldgetsegmentat(mainworld, wx, wy);
         
-        pack->x = wx;
-        pack->y = wy;
+        pack->x = pack->x + (x - (tmpseg->x * SEGMENT_SIZE));
+        pack->y = pack->y + (y - (tmpseg->y * SEGMENT_SIZE));
         listpushback(tmpseg->packs, pack);
+        tmpseg->dirty = 1;
     }
+
+    return 1;
 }
 
 void
@@ -1588,6 +1668,25 @@ wiremovetotop(uint wire)
         wireorder[1] = wireorder[0];
         wireorder[0] = wire;
     }
+}
+
+int
+pointintersectsquad(float px, float py, float x, float y, float w, float h)
+{
+    return (
+        px >= x && px <= x + w &&
+        py >= y && py <= y + h
+    );
+}
+
+int
+quadintersectsquad(float ax, float ay, float aw, float ah,
+        float bx, float by, float bw, float bh)
+{
+    return (
+        ax <= bx + bw && ax + aw >= bx &&
+        ay < by + bh && ay + ah > by
+    );
 }
 
 /* Returns the segment at given segment index coordinates */
@@ -1664,6 +1763,8 @@ static void guibuttonredmouseleave(GUIElement *elem, ...);
 static void guibuttongreenmouseleave(GUIElement *elem, ...);
 static void guibuttonbluemouseleave(GUIElement *elem, ...);
 
+static void guicheckmouseseg(GUIElement *elem);
+
 enum gui_toolbar_buttons {
     BUTTON_NOT,
     BUTTON_OR,
@@ -1705,6 +1806,7 @@ guibuttonnotdown(GUIElement *elem, ...)
 {
     Camera *cam;
     FreeSegment *seg;
+    Package *pack;
     int mx, my;
 
     guisetbacktexture(elem, 384, 0, 64, 64);
@@ -1716,7 +1818,12 @@ guibuttonnotdown(GUIElement *elem, ...)
         my = cam->ent.y + (my - (cam->height / 2.0)) / (cam->zoom / 2.0);
         seg = malloc(sizeof(FreeSegment));
         freeseginit(seg, mx, my, GATE_NOT_W, GATE_NOT_H);
+        pack = packcreate(PACK_NOT, NULL);
+        listpushback(seg->packs, pack);
+        freesegmesh(seg);
         mouseseg = seg;
+        mousemode = MOUSE_GRAB;
+
     }
     elem->layer->dirty = 1;
 }
@@ -1726,6 +1833,7 @@ guibuttonordown(GUIElement *elem, ...)
 {
     Camera *cam;
     FreeSegment *seg;
+    Package *pack;
     int mx, my;
 
     guisetbacktexture(elem, 384, 0, 64, 64);
@@ -1737,7 +1845,12 @@ guibuttonordown(GUIElement *elem, ...)
         my = cam->ent.y + (my - (cam->height / 2.0)) / (cam->zoom / 2.0);
         seg = malloc(sizeof(FreeSegment));
         freeseginit(seg, mx, my, GATE_OR_W, GATE_OR_H);
+        pack = packcreate(PACK_OR, NULL);
+        listpushback(seg->packs, pack);
+        freesegmesh(seg);
         mouseseg = seg;
+        mousemode = MOUSE_GRAB;
+
     }
     elem->layer->dirty = 1;
 }
@@ -1747,6 +1860,7 @@ guibuttonanddown(GUIElement *elem, ...)
 {   
     Camera *cam;
     FreeSegment *seg;
+    Package *pack;
     int mx, my;
 
     guisetbacktexture(elem, 384, 0, 64, 64);
@@ -1757,16 +1871,22 @@ guibuttonanddown(GUIElement *elem, ...)
         mx = cam->ent.x + (mx - (cam->width / 2.0)) / (cam->zoom / 2.0);
         my = cam->ent.y + (my - (cam->height / 2.0)) / (cam->zoom / 2.0);
         seg = malloc(sizeof(FreeSegment));
-        freeseginit(seg, mx, my, GATE_AND_W, GATE_AND_H);
+        freeseginit(seg, 0, 0, GATE_AND_W, GATE_AND_H);
+        pack = packcreate(PACK_AND, NULL);
+        listpushback(seg->packs, pack);
+        freesegmesh(seg);
         mouseseg = seg;
+        mousemode = MOUSE_GRAB;
     }
     elem->layer->dirty = 1;
 }
 
 void
 guibuttonxordown(GUIElement *elem, ...)
-{    Camera *cam;
+{
+    Camera *cam;
     FreeSegment *seg;
+    Package *pack;
     int mx, my;
 
     guisetbacktexture(elem, 384, 0, 64, 64);
@@ -1778,7 +1898,11 @@ guibuttonxordown(GUIElement *elem, ...)
         my = cam->ent.y + (my - (cam->height / 2.0)) / (cam->zoom / 2.0);
         seg = malloc(sizeof(FreeSegment));
         freeseginit(seg, mx, my, GATE_XOR_W, GATE_XOR_H);
+        pack = packcreate(PACK_XOR, NULL);
+        listpushback(seg->packs, pack);
+        freesegmesh(seg);
         mouseseg = seg;
+        mousemode = MOUSE_GRAB;
     }
     elem->layer->dirty = 1;
 }
@@ -1787,6 +1911,10 @@ void
 guibuttonreddown(GUIElement *elem, ...)
 {
     GUIElement *green, *blue;
+
+    if (mousemode != MOUSE_NONE) {
+        return;
+    }
 
     green = guigetelem("toolbar_green");
     blue = guigetelem("toolbar_blue");
@@ -1810,6 +1938,10 @@ guibuttongreendown(GUIElement *elem, ...)
 {
     GUIElement *red, *blue;
 
+    if (mousemode != MOUSE_NONE) {
+        return;
+    }
+
     red = guigetelem("toolbar_red");
     blue = guigetelem("toolbar_blue");
 
@@ -1831,6 +1963,10 @@ void
 guibuttonbluedown(GUIElement *elem, ...)
 {
     GUIElement *red, *green;
+
+    if (mousemode != MOUSE_NONE) {
+        return;
+    }
 
     red = guigetelem("toolbar_red");
     green = guigetelem("toolbar_green");
