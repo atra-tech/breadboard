@@ -43,9 +43,12 @@ enum pack_type {
     PACK_MEMORY
 };
 
+struct World;
+
 typedef struct Wire {
     uint active;
     uint changed;
+    uint layer;
     List *ins;
     List *outs; 
     List *segs;     //Knows when to update
@@ -53,6 +56,7 @@ typedef struct Wire {
 } Wire;
 
 typedef struct Memory {
+    size_t size;
     uint *data;
 } Memory;
 
@@ -75,6 +79,7 @@ typedef struct Package {
     void (*func)(struct Package *);
     Memory *memory;
     Circuit *circuit;
+    char *path;
     char *name;
     DList in_pins;  /* Pin */
     DList out_pins; /* Pin */
@@ -82,13 +87,18 @@ typedef struct Package {
 
 Wire * wirecreate(void);
 void wiredelete(Wire *);
+Wire * wirebuild(struct World *world, uint x, uint y, uint layer);
 void wireset(Wire *wire, uint value);
 
+Circuit * circuitbuild(struct World *world);
 void circuitdelete(Circuit *circuit);
+Wire * circuitgetwireat(Circuit *circuit, uint x, uint y, uint layer);
+void circuitclear(Circuit *circuit);
 
 Package * packcreate(uint type, const char *path);
 void packdelete(Package *pack);
 void packload(Package *pack, const char *path);
+Package * packcopy(Package *pack);
 
 void pininit(Pin *pin, int x, int y, const char *name);
 void pindelete(Pin *pin);

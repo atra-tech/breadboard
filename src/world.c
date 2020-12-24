@@ -31,9 +31,11 @@ static void segmentdelete(Segment *seg);
 static void segmentmesh(Segment *seg);
 static void freeseginit(FreeSegment *seg, float x, float y, uint w, uint h);
 static void freesegdelete(FreeSegment *seg);
+static FreeSegment * freesegcopy(FreeSegment *seg);
 static void freesegmesh(FreeSegment *seg);
 static FreeSegment * freesegbuild(uint x, uint y, uint w, uint h, uint clearsrc);
 static int freesegmerge(FreeSegment *seg, int x, int y);
+static void worldhandlekeys(Event *e);
 static void tilehandlemouse(Tile *tile, float mx, float my);
 static void layermesh(Segment *seg, Layer *layer, const float *color, uint depth);
 static void wirecalcuvs(void);
@@ -120,6 +122,7 @@ static int init = 0;
 static Stack *worldstack;
 static World *mainworld;
 static FreeSegment *mouseseg;
+static FreeSegment *clipboardseg;
 static Shader worldshader;
 static Shader bgshader;
 static Shader indicatorshader;
@@ -385,7 +388,8 @@ worldhandle(World *world, Event *e)
     cam = getmaincamera();
 
     wmx = cam->ent.x + (mx - (cam->width / 2.0f)) / (cam->zoom / 2.0f);
-    wmy = cam->ent.y + ((cam->height - my) - (cam->height / 2.0f)) / (cam->zoom / 2.0f);
+    wmy = cam->ent.y +
+        ((cam->height - my) - (cam->height / 2.0f)) / (cam->zoom / 2.0f);
 
     if (e->type == SDL_MOUSEBUTTONDOWN) {
         if (e->button.button == SDL_BUTTON_LEFT) {
@@ -487,28 +491,68 @@ worldhandle(World *world, Event *e)
         selbox.enabled = 0;
     }*/
 
-    /*  Check if wire buttons are enabled
-     *  If any are enabled, place wire at current mouse position */
-    /*if (mousemode == MOUSE_DRAW || mousemode == MOUSE_ERASE) {
-        my = cam->height - my;
-        tmp_mx = cam->ent.x + (mx - (cam->width / 2.0)) / (cam->zoom / 2.0);
-        tmp_my = cam->ent.y + (my - (cam->height / 2.0)) / (cam->zoom / 2.0);
-
-        seg = worldgetsegmentat(world, tmp_mx, tmp_my);
-        tile = worldgettileat(world, tmp_mx, tmp_my, currentwire);
-        tilehandlemouse(tile, tmp_mx, tmp_my);
-        seg->dirty = 1;
-    } else if (mousemode == MOUSE_GRAB && mouseseg) {
-        my = cam->height - my;
-        tmp_mx = cam->ent.x + (mx - (cam->width / 2.0)) / (cam->zoom / 2.0);
-        tmp_my = cam->ent.y + (my - (cam->height / 2.0)) / (cam->zoom / 2.0);
-
-        glm_mat4_identity(mouseseg->modelmat);
-        glm_translate_x(mouseseg->modelmat, tmp_mx - 1.0f);
-        glm_translate_y(mouseseg->modelmat, tmp_my - 1.0f);
-    }*/
     prev_mx = mx;
     prev_my = my;
+}
+
+void
+worldhandlekeys(Event *e)
+{
+    if (e->type == SDL_KEYDOWN) {
+        if (e->key.keysym.sym == KEYCODE(DELETE) ||
+                e->key.keysym.sym == KEYCODE(ESCAPE)) {
+            if (mouseseg) {
+                freesegdelete(mouseseg);
+                mouseseg = NULL;
+                mousemode = MOUSE_NONE;
+            }
+
+        } else if (e->key.keysym.sym == KEYCODE(c) &&
+                keystate(KEYCODE(LCTRL)) &&
+                selbox.enabled) {
+            if (clipboardseg) {
+                freesegdelete(clipboardseg);
+            }
+            clipboardseg = freesegbuild(
+                    selbox.x, selbox.y, selbox.w, selbox.h, 0);
+
+            if (clipboardseg) {
+                mousemode = MOUSE_GRAB;
+                selbox.enabled = 0;
+            }
+        } else if (e->key.keysym.sym == KEYCODE(v) &&
+                keystate(KEYCODE(LCTRL)) &&
+                clipboardseg && !mouseseg) {
+            mouseseg = freesegcopy(clipboardseg);
+        }
+    }
+}
+
+FreeSegment *
+freesegcopy(FreeSegment *src)
+{
+    uint i, j, l, tile;
+    FreeSegment *dest;
+    Package *packsrc;
+
+    dest = calloc(1, sizeof(FreeSegment));
+    freeseginit(dest, 0, 0, src->w, src->h);
+
+    for (l = 0; l < LAYER_TOTAL; l++) {
+        for (i = 0; i < dest->w; i++) {
+            for (j = 0; j < dest->h; j++) {
+                tile = src->tiles[l][j + i * dest->h].state;
+                dest->tiles[l][j + i * dest->h].state = tile; 
+            }
+        }
+    }
+
+    for (i = 0; i < src->packs->size; i++) {
+        packsrc = listat(src->packs, i);
+        listpushback(dest->packs, packcopy(packsrc));
+    }
+
+    return dest;
 }
 
 void
@@ -962,7 +1006,7 @@ void
 layermesh(Segment *seg, Layer *layer, const float *color, uint depth)
 {
     uint i, j, k, tile, tilenib, idxcount;
-    vec3 vert, norm = {0.0f, 0.0f, 1.0f};
+    vec3 vert, norm = {0.0f, 0.0f, 1.0f}, tilecolor;
     vec2 uv;
     ivec3 index;
 
@@ -971,9 +1015,19 @@ layermesh(Segment *seg, Layer *layer, const float *color, uint depth)
 
     for (i = 0; i < SEGMENT_SIZE; i++) {
         for (j = 0; j < SEGMENT_SIZE; j++) {
-            tile = layer->tiles[j + i * SEGMENT_SIZE].state & 0x1F;
+            tile = layer->tiles[j + i * SEGMENT_SIZE].state;
 
             if (!tile) continue;
+            
+            if (tile & TILE_POWERED) {
+                tilecolor[0] = color[0] * 1.25f;
+                tilecolor[1] = color[1] * 1.25f;
+                tilecolor[2] = color[2] * 1.25f;
+            } else {
+                tilecolor[0] = color[0];
+                tilecolor[1] = color[1];
+                tilecolor[2] = color[2];
+            }
 
             if (tile == TILE_CENTRE) {
                 for (k = 0; k < 4; k++) {
@@ -1000,7 +1054,7 @@ layermesh(Segment *seg, Layer *layer, const float *color, uint depth)
                     uv[0] = wireuvs[tilenib][k * 2 + 0];
                     uv[1] = wireuvs[tilenib][k * 2 + 1];
                     vbufaddvertex(&seg->wirevbo, vert, uv, norm);
-                    veclistpush(&seg->colors, color);
+                    veclistpush(&seg->colors, tilecolor);
                 }
                 SET_INDEX(index, idxcount, 0, 1, 2);
                 vbufaddindex(&seg->wirevbo, index);
@@ -1019,7 +1073,7 @@ freesegmesh(FreeSegment *seg)
 {
     uint l, x, y, i, j, tile, tilenib, idxcount, layer, len;
     float x_min, x_max, y_min, y_max;
-    vec3 vert, norm = {0.0f, 0.0f, 1.0f};
+    vec3 vert, norm = {0.0f, 0.0f, 1.0f}, tilecolor;
     vec2 uv;
     ivec3 index;
     Package *pack;
@@ -1046,6 +1100,16 @@ freesegmesh(FreeSegment *seg)
 
                 if (!tile) continue;
 
+                if (tile & TILE_POWERED) {
+                    tilecolor[0] = colors[layer][0] * 1.25f;
+                    tilecolor[1] = colors[layer][1] * 1.25f;
+                    tilecolor[2] = colors[layer][2] * 1.25f;
+                } else {
+                    tilecolor[0] = colors[layer][0];
+                    tilecolor[1] = colors[layer][1];
+                    tilecolor[2] = colors[layer][2];
+                }
+
                 if (tile == TILE_CENTRE) {
                     for (i = 0; i < 4; i++) {
                         vert[0] = x + tileverts[i * 3 + 0];
@@ -1071,7 +1135,7 @@ freesegmesh(FreeSegment *seg)
                         uv[0] = wireuvs[tilenib][i * 2 + 0];
                         uv[1] = wireuvs[tilenib][i * 2 + 1];
                         vbufaddvertex(vbo, vert, uv, norm);
-                        veclistpush(&seg->colors, colors[layer]);
+                        veclistpush(&seg->colors, tilecolor);
                     }
                     SET_INDEX(index, idxcount, 0, 1, 2);
                     vbufaddindex(vbo, index);
