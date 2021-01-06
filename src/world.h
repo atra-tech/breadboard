@@ -113,23 +113,17 @@ typedef struct FreeSegment {
     float x, y;
     uint w, h;
     float prev_x, prev_y;
-    //VBuffer vbo;
-    VBuffer wirevbo;
-    VBuffer textvbo;
-    VecList colors;
-    VecList textcolors;
+    VBuffer wirevbo, textvbo;
+    VecList colors, textcolors;
     mat4 modelmat;
     Tile *tiles[LAYER_TOTAL];   //Size based on layer dimensions
     List *packs;
 } FreeSegment;
 
 typedef struct Segment {
-    int x, y, dirty;
-    VBuffer vbo;
-    VBuffer wirevbo;
-    VBuffer textvbo;
-    VecList colors;
-    VecList textcolors;
+    int x, y, dirty, changed;
+    VBuffer vbo, wirevbo, textvbo;
+    VecList colors, textcolors;
     mat4 modelmat;
     Layer layers[LAYER_TOTAL];
     List *packs;
@@ -137,6 +131,7 @@ typedef struct Segment {
 
 typedef struct World {
     Segment *segs[SEGMENT_COUNT];
+    Circuit *circuit;
 } World;
 
 typedef struct SelectBox {

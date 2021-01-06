@@ -13,12 +13,14 @@
 #include "world.h"
 #include "file.h"
 
-typedef int ivec2[2];
-
 static void packinit_not(Package *pack);
 static void packinit_or(Package *pack);
 static void packinit_and(Package *pack);
 static void packinit_xor(Package *pack);
+static void packinit_memory(Package *pack);
+static void packinit_input(Package *pack);
+static void packinit_output(Package *pack);
+static void packinit_clock(Package *pack);
 
 static uint vec2_hash(const void *);
 static uint vec2_eq(const void *, const void *);
@@ -59,74 +61,89 @@ wirebuild(World *world, uint x, uint y, uint layer)
     Segment *seg;
     List *agenda;
     Tile *tile, *tileadj;
-    ivec2 *coord;
-    uint i;
+    int *coord;
+    uint i, found;
 
     wire = wirecreate();
     wire->layer = layer;
     agenda = listcreate();
 
-    coord = malloc(sizeof(ivec2));
-    *coord[0] = x;
-    *coord[1] = y;
+    coord = malloc(2 * sizeof(int));
+    coord[0] = x;
+    coord[1] = y;
     listpushback(agenda, coord);
 
     while (agenda->size > 0) {
         coord = listat(agenda, 0);
-        tile = worldgettileat(world, *coord[0], *coord[1], layer);
-        seg = worldgetsegmentat(world, *coord[0], *coord[1]);
+        tile = worldgettileat(world, coord[0], coord[1], layer);
+        seg = worldgetsegmentat(world, coord[0], coord[1]);
+
         htableadd(wire->tiles, coord, tile);
-        x = *coord[0];
-        y = *coord[1];
+        x = coord[0];
+        y = coord[1];
+        found = 0;
 
         /* Add segment to list if it does not exist */
         for (i = 0; i < wire->segs->size; i++) {
             if (seg == listat(wire->segs, i)) {
-                goto skipsegadd;
+                found = 1;
             }
         }
-        listpushback(wire->segs, seg);
-skipsegadd:
+        if (!found) {
+            listpushback(wire->segs, seg);
+        }
 
         /* Queue connected tiles */
         if (tile->state & TILE_TOP && y < WORLD_TILES_PER_ROW - 1) {
             tileadj = worldgettileat(world, x, y + 1, layer);
 
             if (tileadj->state & TILE_BOT) {
-                coord = malloc(sizeof(ivec2));
-                *coord[0] = x;
-                *coord[1] = y + 1;
-                listpushback(agenda, coord);
+                coord = malloc(2 * sizeof(int));
+                coord[0] = x;
+                coord[1] = y + 1;
+
+                if (!htableget(wire->tiles, coord)) {
+                    listpushback(agenda, coord);
+                }
             }
         }
         if (tile->state & TILE_BOT && y > 0) {
             tileadj = worldgettileat(world, x, y - 1, layer);
 
             if (tileadj->state & TILE_TOP) {
-                coord = malloc(sizeof(ivec2));
-                *coord[0] = x;
-                *coord[1] = y - 1;
-                listpushback(agenda, coord);
+                coord = malloc(2 * sizeof(int));
+                coord[0] = x;
+                coord[1] = y - 1;
+
+                if (!htableget(wire->tiles, coord)) {
+                    listpushback(agenda, coord);
+                }
             }
         }
         if (tile->state & TILE_LEFT && x > 0) {
             tileadj = worldgettileat(world, x - 1, y, layer);
 
             if (tileadj->state & TILE_RIGHT) {
-                coord = malloc(sizeof(ivec2));
-                *coord[0] = x - 1;
-                *coord[1] = y;
-                listpushback(agenda, coord);
+                coord = malloc(2 * sizeof(int));
+                coord[0] = x - 1;
+                coord[1] = y;
+
+                if (!htableget(wire->tiles, coord)) {
+                    listpushback(agenda, coord);
+                }
             }
         }
         if (tile->state & TILE_RIGHT && x < WORLD_TILES_PER_ROW - 1) {
             tileadj = worldgettileat(world, x + 1, y, layer);
 
             if (tileadj->state & TILE_LEFT) {
-                coord = malloc(sizeof(ivec2));
-                *coord[0] = x + 1;
-                *coord[1] = y;
-                listpushback(agenda, coord);
+                coord = malloc(2 * sizeof(int));
+                coord[0] = x + 1;
+                coord[1] = y;
+
+                if (!htableget(wire->tiles, coord)) {
+                    listpushback(agenda, coord);
+                }
             }
         }
         listremove(agenda, 0);
@@ -137,13 +154,110 @@ skipsegadd:
 
 /* Set wire activation state and set flags */
 void
-wireset(Wire *wire, uint value)
+wireputsig(Wire *wire, uint value, uint highlight)
 {
+    uint i;
+    Pin *pin;
+    Segment *seg;
+    Tile *tile;
+
     if (wire->active != value) {
-        wire->active = value;
+        wire->active = wire->active;
         wire->changed = 1;
+
+        /* Update any output pins */
+        /*for (i = 0; i < wire->outs->size; i++) {
+            pin = listat(wire->outs, i);
+            pin->state = pin->state || wire->active;
+        }*/
+
+        /* Update world-space tiles for visual highlighting */
+        if (highlight) {
+            if (wire->active) {
+                for (i = 0; i < wire->tiles->size; i++) {
+                    tile = wire->tiles->vals[i];
+                    
+                    if (!tile) continue;
+
+                    BIT_SET(tile->state, TILE_POWERED);
+                }
+            } else {
+                for (i = 0; i < wire->tiles->size; i++) {
+                    tile = wire->tiles->vals[i];
+
+                    if (!tile) continue;
+
+                    BIT_CLR(tile->state, TILE_POWERED);
+                }
+            }
+        }
+        
+        /* Queue segment remeshes */
+        for (i = 0; i < wire->segs->size; i++) {
+            seg = listat(wire->segs, i);
+            seg->dirty = 1;
+        }
     }
-    /* TODO: Perhaps pass activation state to output pins? */
+}
+
+/* Pulls wire state based on input pins */
+void
+wireupdate(Wire *wire)
+{
+    uint i, prevstate;
+    Pin *pin;
+    Segment *seg;
+    Tile *tile;
+
+    prevstate = wire->active;
+    wire->active = 0;
+
+    /* Activate wire if any pins are enabled */
+    for (i = 0; i < wire->ins->size; i++) {
+        pin = listat(wire->ins, i);
+
+        if (pin->state) {
+            wire->active = pin->state;
+            break;
+        }
+    }
+
+    /* Flag connected packs for updating */
+    if (wire->active != prevstate) {
+        for (i = 0; i < wire->outs->size; i++) {
+            pin = listat(wire->outs, i);
+            pin->parent->changed = 1;
+        }
+    }
+
+    /* Update world-space tiles for visual highlighting */
+    if (wire->tiles->occupied) {
+        if (wire->active) {
+            for (i = 0; i < wire->tiles->size; i++) {
+                tile = wire->tiles->vals[i];
+
+                if (!tile) continue;
+
+                BIT_SET(tile->state, TILE_POWERED);
+            }
+        } else {
+            for (i = 0; i < wire->tiles->size; i++) {
+                tile = wire->tiles->vals[i];
+
+                if (!tile) continue;
+
+                BIT_CLR(tile->state, TILE_POWERED);
+            }
+        }
+    }    
+
+    /* Queue segment remeshes */
+    for (i = 0; i < wire->segs->size; i++) {
+        seg = listat(wire->segs, i);
+        seg->dirty = 1;
+    }
+
+    wire->changed = 0;
 }
 
 Package *
@@ -153,6 +267,9 @@ packcreate(uint type, const char *path)
     Package *pack;
 
     pack = calloc(1, sizeof(Package));
+    pack->clockrate = 1;
+    pack->changed = 1;
+    pack->type = type;
     dlistinit(&pack->in_pins, sizeof(Pin));
     dlistinit(&pack->out_pins, sizeof(Pin));
 
@@ -177,6 +294,18 @@ packcreate(uint type, const char *path)
         break;
     case PACK_XOR:
         packinit_xor(pack);
+        break;
+    case PACK_MEMORY:
+        packinit_memory(pack);
+        break;
+    case PACK_INPUT:
+        packinit_input(pack);
+        break;
+    case PACK_OUTPUT:
+        packinit_output(pack);
+        break;
+    case PACK_CLOCK:
+        packinit_clock(pack);
         break;
     }
 
@@ -235,6 +364,8 @@ packcopy(Package *src)
     dest->y = src->y;
     dest->w = src->w;
     dest->h = src->h;
+    dest->clockrate = src->clockrate;
+    dest->state = src->state;
 
     if (src->memory) {
         size = src->memory->size * sizeof(uint);
@@ -245,6 +376,62 @@ packcopy(Package *src)
     }
 
     return dest;
+}
+
+/* Calculate state of package output pins based on input pin states */
+void
+packupdate(Package *pack, float dt)
+{
+    uint i, j;
+    Pin *pin;
+    Wire *wire;
+
+    switch(pack->type) {
+    case PACK_CIRCUIT:
+        for (i = 0; i < pack->in_pins.size; i++) {
+            pin = dlistat(&pack->in_pins, i);
+            pingetsig(pin);
+        }
+        circuitupdate(pack->circuit, dt);
+
+        for (i = 0; i < pack->out_pins.size; i++) {
+            pin = dlistat(&pack->out_pins, i);
+            pingetsig(pin);
+        }
+        break;
+    case PACK_INPUT:
+        /* Pack state is set by world input handler */
+        pin = dlistat(&pack->out_pins, 0);
+        pin->state = pack->state; 
+        break;
+    case PACK_OUTPUT:
+        pin = dlistat(&pack->in_pins, 0);
+        pack->state = pin->state;
+        break;
+    case PACK_CLOCK:
+        /* Switch state based on system time */
+        pin = dlistat(&pack->out_pins, 0);
+        pack->time += dt;
+        if (pack->time >= pack->clockrate) {
+            pack->time -= pack->clockrate;
+            pack->state = !pack->state;
+        }
+        break;
+    default:
+        pack->func(pack);
+    }
+
+    /* Flag all output wires for updating */
+    for (i = 0; i < pack->out_pins.size; i++) {
+        pin = dlistat(&pack->out_pins, i);
+
+        for (j = 0; j < pin->outs->size; j++) {
+            wire = listat(pin->outs, j);
+            wire->changed = 1;
+        }
+    }
+
+    pack->changed = 0;
 }
 
 /* Build a logical circuit from a world-space circuit */
@@ -258,39 +445,6 @@ circuitbuild(struct World *world)
     Wire *wire;
     Pin *pin;
     Tile *tile;
-
-    /*  Circuit building algorithm
-     *
-     *  For each world segment
-     *      Check for packages
-     *      If no packages are present:
-     *          Go to next segment.
-     *      Else: 
-     *          For each package:
-     *              For each output pin on package:
-     *                  For each layer in segment:
-     *                  If a connected wire is present in world-space:
-     *                      Check that wire at coordinate is not present in any other wire
-     *                      If wire is not present in any other wire:
-     *                          Begin building new logical wire:
-     *                              + Cascades through connected wires in island.
-     *                              + Adds tile coords to hash table
-     *                              + Assigns layer (prevents overlaps)
-     *                              + Does not check for input pins
-     *                          Add the new wire to master circuit
-     *                      Add the wire to pin output
-     *  For each world segment
-     *      Check for packages
-     *      If no packages are present:
-     *          Go to next segment.
-     *      Else: 
-     *          For each package:
-     *              For each input pin on package:
-     *                  If a connected wire is present in world-space:
-     *                      Get logical wire that tile belongs to
-     *                      If logical wire exists:
-     *                          Add wire to pin input
-     * */
 
     circuit = malloc(sizeof(Circuit));
     circuit->wires = listcreate();
@@ -318,10 +472,11 @@ circuitbuild(struct World *world)
                             wire = circuitgetwireat(circuit, x, y, l);
 
                             if (!wire) {
-                                wire = wirebuild(world, x, y, l);    
+                                wire = wirebuild(world, x, y, l);
                                 listpushback(circuit->wires, wire);
                             }
                             listpushback(pin->outs, wire);
+                            listpushback(wire->ins, pin);
                         }
                     }
                 }
@@ -330,7 +485,7 @@ circuitbuild(struct World *world)
         }
     }
 
-    /* Connect input pins to wires */
+    /* Connect input pins to existing wires */
     for (s = 0; s < SEGMENT_COUNT; s++) {
         seg = world->segs[s];
         
@@ -351,6 +506,7 @@ circuitbuild(struct World *world)
 
                         if (tile->state & TILE_RIGHT && wire) {
                             listpushback(pin->ins, wire);
+                            listpushback(wire->outs, pin);
                         }
                     }
                 }
@@ -366,13 +522,10 @@ circuitdelete(Circuit *circuit)
 {
     uint i;
 
-    for (i = 0; i < circuit->packs->size; i++) {
-        packdelete(listat(circuit->packs, i));
-    }
-
-    for (i = 0; i < circuit->wires->size; i++) {
-        wiredelete(listat(circuit->wires, i));
-    }
+    circuitclear(circuit);
+    listdelete(circuit->wires);
+    listdelete(circuit->packs);
+    free(circuit);
 }
 
 /* Returns wire if the tile at the given position is already part of
@@ -382,16 +535,16 @@ circuitgetwireat(Circuit *circuit, uint x, uint y, uint layer)
 {
     uint i;
     Wire *wire;
-    ivec2 coord;
+    int coord[2];
 
     for (i = 0; i < circuit->wires->size; i++) {
         wire = listat(circuit->wires, i);
-        coord[0] = x;
-        coord[1] = y;
 
         if (wire->layer != layer) {
             continue;
         }
+        coord[0] = x;
+        coord[1] = y;
 
         if (htableget(wire->tiles, coord)) {
             return wire;
@@ -404,7 +557,7 @@ circuitgetwireat(Circuit *circuit, uint x, uint y, uint layer)
 void
 circuitclear(Circuit *circuit)
 {
-    uint i, j, k;
+    uint i, j;
     Package *pack;
     Pin *pin;
 
@@ -426,10 +579,97 @@ circuitclear(Circuit *circuit)
             listclear(pin->outs);
         }
     }
+    listclear(circuit->packs);
 }
 
 void
-pininit(Pin *pin, int x, int y, const char *name)
+circuitupdate(Circuit *circuit, float dt)
+{
+    uint i, found;
+    Wire *wire;
+    Package *pack;
+    
+    found = 1;
+
+    while (found) {
+        found = 0;
+
+        for (i = 0; i < circuit->wires->size; i++) {
+            wire = listat(circuit->wires, i);
+
+            if (wire->changed) {
+                wireupdate(wire);
+                found = 1;
+            }
+        }
+
+        for (i = 0; i < circuit->packs->size; i++) {
+            pack = listat(circuit->packs, i);
+
+            if (pack->changed) {
+                packupdate(pack, dt);
+                found = 1;
+            }
+        }
+    }
+}
+
+/* Runs updates on the whole circuit, instead of
+ * following pure event scheduling. */
+void
+circuitupdatefull(Circuit *circuit, float dt)
+{
+    uint i, j, k;
+    World *world;
+    Segment *seg;
+    Layer *layer;
+    Package *pack;
+    Wire *wire;
+    Pin *pin;
+
+    world = worldtop();
+
+    /* Clear all world-space wire activation states */
+    for (i = 0; i < SEGMENT_COUNT; i++) {
+        seg = world->segs[i];
+
+        for (j = 0; j < LAYER_TOTAL; j++) {
+            layer = seg->layers + j;
+
+            for (k = 0; k < LAYER_TILECOUNT; k++) {
+                BIT_CLR(layer->tiles[k].state, TILE_POWERED);
+            }
+        }
+    }
+    
+    for (i = 0; i < circuit->wires->size; i++) {
+        wire = listat(circuit->wires, i);
+        wireupdate(wire);
+    }
+
+    /* Mark all packs for updating */
+    for (i = 0; i < circuit->packs->size; i++) {
+        pack = listat(circuit->packs, i);
+        pack->changed = 1;
+    }
+
+    for (i = 0; i < circuit->wires->size; i++) {
+        wire = listat(circuit->wires, i);
+        wire->changed = 1;
+    }
+    circuitupdate(circuit, dt);
+}
+
+void
+circuitrebuild(struct World *world, Circuit **circuit)
+{
+    circuitclear(*circuit);
+    *circuit = circuitbuild(world);
+    circuitupdatefull(*circuit, 0.0f);
+}
+
+void
+pininit(Package *pack, Pin *pin, int x, int y, const char *name)
 {
     uint len;
 
@@ -441,6 +681,7 @@ pininit(Pin *pin, int x, int y, const char *name)
     memcpy(pin->name, name, len + 1);
     pin->ins = listcreate();
     pin->outs = listcreate();
+    pin->parent = pack;
 }
 
 void
@@ -465,16 +706,13 @@ pingetsig(Pin *pin)
     }
 }
 
+/* Increments times of all clock packages by dt */
 void
-pinputsig(Pin *pin)
+updateclocktimes(float dt)
 {
-    uint i;
-    Wire *wire;
-
-    for (i = 0; i < pin->outs->size; i++) {
-        wire = listat(pin->outs, i);
-        wireset(wire, pin->state);
-    }
+    /* TODO: Either universally keep track of packs in some global list;
+     * or iterate over the current world circuit, and all of it's
+     * subcircuits looking for clock packs */
 }
 
 void
@@ -487,7 +725,6 @@ packfunc_not(Package *pack)
 
     pingetsig(in);
     out->state = !in->state;
-    pinputsig(out);
 }
 
 void
@@ -504,8 +741,6 @@ packfunc_or(Package *pack)
     pingetsig(b);
     out->state = a->state + b->state;
     neg_out->state = !out->state;
-    pinputsig(out);
-    pinputsig(neg_out);
 }
 
 void
@@ -522,8 +757,6 @@ packfunc_and(Package *pack)
     pingetsig(b);
     out->state = a->state * b->state;
     neg_out->state = !out->state;
-    pinputsig(out);
-    pinputsig(neg_out);
 }
 
 void
@@ -540,8 +773,30 @@ packfunc_xor(Package *pack)
     pingetsig(b);
     out->state = (a->state != b->state);
     neg_out->state = !out->state;
-    pinputsig(out);
-    pinputsig(neg_out);
+}
+
+void
+packfunc_memory(Package *pack)
+{
+
+}
+
+void
+packfunc_input(Package *pack)
+{
+
+}
+
+void
+packfunc_output(Package *pack)
+{
+
+}
+
+void
+packfunc_clock(Package *pack)
+{
+
 }
 
 void
@@ -555,10 +810,10 @@ packinit_not(Package *pack)
     pack->name = malloc(4 * sizeof(char));
     memcpy(pack->name, "NOT", 4 * sizeof(char));
 
-    pininit(&pin, -1, 0, "A");
+    pininit(pack, &pin, -1, 0, "A");
     dlistpush(&pack->in_pins, &pin);
-    
-    pininit(&pin, GATE_NOT_W, 0, "!A");
+ 
+    pininit(pack, &pin, GATE_NOT_W, 0, "!A");
     dlistpush(&pack->out_pins, &pin);
 }
 
@@ -573,16 +828,16 @@ packinit_or(Package *pack)
     pack->name = malloc(3 * sizeof(char));
     memcpy(pack->name, "OR", 3 * sizeof(char));
     
-    pininit(&pin, -1, 1, "A");
+    pininit(pack, &pin, -1, 1, "A");
     dlistpush(&pack->in_pins, &pin);
     
-    pininit(&pin, -1, 0, "B");
+    pininit(pack, &pin, -1, 0, "B");
     dlistpush(&pack->in_pins, &pin);
     
-    pininit(&pin, GATE_OR_W, 1, "Q");
+    pininit(pack, &pin, GATE_OR_W, 1, "Q");
     dlistpush(&pack->out_pins, &pin);
 
-    pininit(&pin, GATE_OR_W, 0, "!Q");
+    pininit(pack, &pin, GATE_OR_W, 0, "!Q");
     dlistpush(&pack->out_pins, &pin);
 }
 
@@ -597,16 +852,16 @@ packinit_and(Package *pack)
     pack->name = malloc(4 * sizeof(char));
     memcpy(pack->name, "AND", 4 * sizeof(char));
     
-    pininit(&pin, -1, 1, "A");
+    pininit(pack, &pin, -1, 1, "A");
     dlistpush(&pack->in_pins, &pin);
     
-    pininit(&pin, -1, 0, "B");
+    pininit(pack, &pin, -1, 0, "B");
     dlistpush(&pack->in_pins, &pin);
     
-    pininit(&pin, GATE_AND_W, 1, "Q");
+    pininit(pack, &pin, GATE_AND_W, 1, "Q");
     dlistpush(&pack->out_pins, &pin);
 
-    pininit(&pin, GATE_AND_W, 0, "!Q");
+    pininit(pack, &pin, GATE_AND_W, 0, "!Q");
     dlistpush(&pack->out_pins, &pin);
 }
 
@@ -621,32 +876,170 @@ packinit_xor(Package *pack)
     pack->name = malloc(4 * sizeof(char));
     memcpy(pack->name, "XOR", 4 * sizeof(char));
     
-    pininit(&pin, -1, 1, "A");
+    pininit(pack, &pin, -1, 1, "A");
     dlistpush(&pack->in_pins, &pin);
     
-    pininit(&pin, -1, 0, "B");
+    pininit(pack, &pin, -1, 0, "B");
     dlistpush(&pack->in_pins, &pin);
     
-    pininit(&pin, GATE_XOR_W, 1, "Q");
+    pininit(pack, &pin, GATE_XOR_W, 1, "Q");
     dlistpush(&pack->out_pins, &pin);
 
-    pininit(&pin, GATE_XOR_W, 0, "!Q");
+    pininit(pack, &pin, GATE_XOR_W, 0, "!Q");
+    dlistpush(&pack->out_pins, &pin);
+}
+
+void
+packinit_memory(Package *pack)
+{
+    Pin pin;
+
+    pack->w = PACK_MEM_W;
+    pack->h = PACK_MEM_H;
+    pack->func = packfunc_memory;
+    pack->name = malloc(4 * sizeof(char));
+    memcpy(pack->name, "RAM", 4 * sizeof(char));
+    
+    pininit(pack, &pin, -1, 18, "D0");
+    dlistpush(&pack->in_pins, &pin);
+    
+    pininit(pack, &pin, -1, 17, "D1");
+    dlistpush(&pack->in_pins, &pin);
+
+    pininit(pack, &pin, -1, 16, "D2");
+    dlistpush(&pack->in_pins, &pin);
+
+    pininit(pack, &pin, -1, 15, "D3");
+    dlistpush(&pack->in_pins, &pin);
+    
+    pininit(pack, &pin, -1, 14, "D4");
+    dlistpush(&pack->in_pins, &pin);
+    
+    pininit(pack, &pin, -1, 13, "D5");
+    dlistpush(&pack->in_pins, &pin);
+    
+    pininit(pack, &pin, -1, 12, "D6");
+    dlistpush(&pack->in_pins, &pin);
+    
+    pininit(pack, &pin, -1, 11, "D7");
+    dlistpush(&pack->in_pins, &pin);
+    
+    pininit(pack, &pin, -1, 10, "A0");
+    dlistpush(&pack->in_pins, &pin);
+    
+    pininit(pack, &pin, -1, 9, "A1");
+    dlistpush(&pack->in_pins, &pin);
+
+    pininit(pack, &pin, -1, 8, "A2");
+    dlistpush(&pack->in_pins, &pin);
+
+    pininit(pack, &pin, -1, 7, "A3");
+    dlistpush(&pack->in_pins, &pin);
+    
+    pininit(pack, &pin, -1, 6, "A4");
+    dlistpush(&pack->in_pins, &pin);
+    
+    pininit(pack, &pin, -1, 5, "A5");
+    dlistpush(&pack->in_pins, &pin);
+    
+    pininit(pack, &pin, -1, 4, "A6");
+    dlistpush(&pack->in_pins, &pin);
+    
+    pininit(pack, &pin, -1, 3, "A7");
+    dlistpush(&pack->in_pins, &pin);
+
+    pininit(pack, &pin, -1, 2, "LD");
+    dlistpush(&pack->in_pins, &pin);
+    
+    pininit(pack, &pin, -1, 1, "ST");
+    dlistpush(&pack->in_pins, &pin);
+    
+    pininit(pack, &pin, -1, 0, "CLK");
+    dlistpush(&pack->in_pins, &pin);
+
+    pininit(pack, &pin, PACK_MEM_W, 18, "O0");
+    dlistpush(&pack->out_pins, &pin);
+    
+    pininit(pack, &pin, PACK_MEM_W, 17, "O1");
+    dlistpush(&pack->out_pins, &pin);
+
+    pininit(pack, &pin, PACK_MEM_W, 16, "O2");
+    dlistpush(&pack->out_pins, &pin);
+    
+    pininit(pack, &pin, PACK_MEM_W, 15, "O3");
+    dlistpush(&pack->out_pins, &pin);
+    
+    pininit(pack, &pin, PACK_MEM_W, 14, "O4");
+    dlistpush(&pack->out_pins, &pin);
+    
+    pininit(pack, &pin, PACK_MEM_W, 13, "O5");
+    dlistpush(&pack->out_pins, &pin);
+    
+    pininit(pack, &pin, PACK_MEM_W, 12, "O6");
+    dlistpush(&pack->out_pins, &pin);
+    
+    pininit(pack, &pin, PACK_MEM_W, 11, "O7");
+    dlistpush(&pack->out_pins, &pin);
+}
+
+void
+packinit_input(Package *pack)
+{
+    Pin pin;
+
+    pack->w = PACK_IN_W;
+    pack->h = PACK_IN_H;
+    pack->func = packfunc_input;
+    pack->name = malloc(3 * sizeof(char));
+    memcpy(pack->name, "IN", 3 * sizeof(char));
+    
+    pininit(pack, &pin, PACK_IN_W, 0, "");
+    dlistpush(&pack->out_pins, &pin);
+}
+
+void
+packinit_output(Package *pack)
+{
+    Pin pin;
+
+    pack->w = PACK_OUT_W;
+    pack->h = PACK_OUT_H;
+    pack->func = packfunc_output;
+    pack->name = malloc(4 * sizeof(char));
+    memcpy(pack->name, "OUT", 4 * sizeof(char));
+    
+    pininit(pack, &pin, PACK_OUT_W, 0, "");
+    dlistpush(&pack->in_pins, &pin);
+}
+
+void
+packinit_clock(Package *pack)
+{
+    Pin pin;
+
+    pack->w = PACK_CLK_W;
+    pack->h = PACK_CLK_H;
+    pack->func = packfunc_clock;
+    pack->name = malloc(6 * sizeof(char));
+    memcpy(pack->name, "CLOCK", 6 * sizeof(char));
+
+    pininit(pack, &pin, PACK_CLK_W, 0, "");
     dlistpush(&pack->out_pins, &pin);
 }
 
 uint
 vec2_hash(const void *vec)
 {
-    const ivec2 *data = vec;
+    const int *data = vec;
 
-    return ((int)*data[0] ^ (int)*data[1]) >> 2;
+    return (data[0] ^ data[1]) >> 2;
 }
 
 uint
 vec2_eq(const void *vec_a, const void *vec_b)
 {
-    const ivec2 *a = vec_a;
-    const ivec2 *b = vec_b;
+    const int *a = vec_a;
+    const int *b = vec_b;
     
-    return (*a[0] == *b[0]) && (*a[1] == *b[1]);
+    return (a[0] == b[0]) && (a[1] == b[1]);
 }

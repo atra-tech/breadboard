@@ -43,8 +43,6 @@ void *
 listat(List *list, uint index)
 {
     if (index >= list->size) {
-        logprint(LOG_ERROR, "list: Unable to get element: "\
-                            "Index out of range");
         return NULL;
     }
     return list->elem[index];
@@ -160,6 +158,10 @@ void
 listremove(List *list, uint index)
 {
     uint i;
+
+    if (index >= list->size || list->size == 0) {
+        return;
+    }
 
     for (i = index; i < list->size - 1; i++) {
         list->elem[i] = list->elem[i + 1];
@@ -281,7 +283,7 @@ dlistinit(DList *list, size_t elemsize)
 void *
 dlistat(DList *list, uint index)
 {
-    return (char *)list->data + index * list->elemsize;
+    return ((char *)list->data) + index * list->elemsize;
 }
 
 void

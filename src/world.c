@@ -191,14 +191,6 @@ worldstart(void)
     selboxinit(&selbox);
     guitoolbarcreate();
     init = 1;
-
-    /*
-    FreeSegment *seg = calloc(1, sizeof(FreeSegment));
-    mousemode = MOUSE_GRAB;
-    freeseginit(seg, 0, 0, 4, 4);
-    mouseseg = seg;
-    listpushback(seg->packs, packcreate(PACK_AND, NULL));
-    freesegmesh(seg);*/
 }
 
 void
@@ -234,6 +226,7 @@ worldinit(World *world)
             world->segs[i * SEGMENTS_PER_ROW + j] = seg;
         }
     }
+    world->circuit = circuitbuild(world);
     worldpush(world);
 }
 
@@ -301,8 +294,6 @@ segmentinit(Segment *seg, uint x, uint y)
     for (i = 0; i < LAYER_TOTAL; i++) {
         memset(seg->layers[i].tiles, 0, LAYER_TILECOUNT * sizeof(Tile));
     }
-
-    listpushback(seg->packs, packcreate(PACK_AND, NULL));
 }
 
 void
@@ -391,6 +382,8 @@ worldhandle(World *world, Event *e)
     wmy = cam->ent.y +
         ((cam->height - my) - (cam->height / 2.0f)) / (cam->zoom / 2.0f);
 
+    worldhandlekeys(e);
+
     if (e->type == SDL_MOUSEBUTTONDOWN) {
         if (e->button.button == SDL_BUTTON_LEFT) {
             //TODO: Check for selection box under cursor
@@ -404,6 +397,7 @@ worldhandle(World *world, Event *e)
                     freesegdelete(mouseseg);
                     mouseseg = NULL;
                     mousemode = MOUSE_NONE;
+                    circuitrebuild(mainworld, &mainworld->circuit);
                 } else {
                     /* TODO: Indicate placement error in some way
                      *       (Do it inside freesegmerge, maybe?)
@@ -421,6 +415,7 @@ worldhandle(World *world, Event *e)
                         mousemode = MOUSE_GRAB;
                         selbox.enabled = 0;
                     }
+                    circuitrebuild(mainworld, &mainworld->circuit);
                 } else {
                     mousemode = MOUSE_NONE;
                     selbox.enabled = 0;
@@ -454,10 +449,12 @@ worldhandle(World *world, Event *e)
                 mousemode = MOUSE_BOXREADY;
             } else if (mousemode == MOUSE_DRAW) {
                 mousemode = MOUSE_NONE;
+                circuitrebuild(mainworld, &mainworld->circuit);
             }
         } else if (e->button.button == SDL_BUTTON_RIGHT) {
             if (mousemode == MOUSE_ERASE) {
                 mousemode = MOUSE_NONE;
+                circuitrebuild(mainworld, &mainworld->circuit);
             }
         }
     } else if (e->type == SDL_MOUSEMOTION) {
@@ -476,7 +473,6 @@ worldhandle(World *world, Event *e)
             } else if (selbox.y + selbox.h >= WORLD_TILES_PER_ROW) {
                 selbox.h = WORLD_TILES_PER_ROW - 1;
             }
-
             selboxmesh(&selbox);
         }
     }
@@ -484,8 +480,10 @@ worldhandle(World *world, Event *e)
 
     if (!(mstate & MOUSE_BUTTON(LEFT)) && mousemode == MOUSE_DRAW) {
         mousemode = MOUSE_NONE;
+        circuitrebuild(mainworld, &mainworld->circuit);
     } else if (!(mstate & MOUSE_BUTTON(RIGHT)) && mousemode == MOUSE_ERASE) {
         mousemode = MOUSE_NONE;
+        circuitrebuild(mainworld, &mainworld->circuit);
     } /*else if (!(mstate & MOUSE_BUTTON(LEFT)) && mousemode == MOUSE_DRAGBOX) {
         mousemode = MOUSE_NONE;
         selbox.enabled = 0;
@@ -517,13 +515,14 @@ worldhandlekeys(Event *e)
                     selbox.x, selbox.y, selbox.w, selbox.h, 0);
 
             if (clipboardseg) {
-                mousemode = MOUSE_GRAB;
+                //mousemode = MOUSE_GRAB;
                 selbox.enabled = 0;
             }
         } else if (e->key.keysym.sym == KEYCODE(v) &&
                 keystate(KEYCODE(LCTRL)) &&
                 clipboardseg && !mouseseg) {
             mouseseg = freesegcopy(clipboardseg);
+            mousemode = MOUSE_GRAB;
         }
     }
 }
@@ -650,6 +649,8 @@ worldupdate(World *world, float dt)
         glm_translate_x(mouseseg->modelmat, tmp_mx - 1.0f);
         glm_translate_y(mouseseg->modelmat, tmp_my - 1.0f);
     }
+
+    circuitupdate(mainworld->circuit, dt);
 }
 
 void
@@ -1020,13 +1021,13 @@ layermesh(Segment *seg, Layer *layer, const float *color, uint depth)
             if (!tile) continue;
             
             if (tile & TILE_POWERED) {
-                tilecolor[0] = color[0] * 1.25f;
-                tilecolor[1] = color[1] * 1.25f;
-                tilecolor[2] = color[2] * 1.25f;
-            } else {
                 tilecolor[0] = color[0];
                 tilecolor[1] = color[1];
                 tilecolor[2] = color[2];
+            } else {
+                tilecolor[0] = color[0] * 0.5f;
+                tilecolor[1] = color[1] * 0.5f;
+                tilecolor[2] = color[2] * 0.5f;
             }
 
             if (tile == TILE_CENTRE) {
@@ -1036,7 +1037,7 @@ layermesh(Segment *seg, Layer *layer, const float *color, uint depth)
                     uv[0] = wireuvs[0][k * 2 + 0];
                     uv[1] = wireuvs[0][k * 2 + 1];
                     vbufaddvertex(&seg->wirevbo, vert, uv, norm);
-                    veclistpush(&seg->colors, color);
+                    veclistpush(&seg->colors, tilecolor);
                 }
                 SET_INDEX(index, idxcount, 0, 1, 2);
                 vbufaddindex(&seg->wirevbo, index);
@@ -1101,13 +1102,13 @@ freesegmesh(FreeSegment *seg)
                 if (!tile) continue;
 
                 if (tile & TILE_POWERED) {
-                    tilecolor[0] = colors[layer][0] * 1.25f;
-                    tilecolor[1] = colors[layer][1] * 1.25f;
-                    tilecolor[2] = colors[layer][2] * 1.25f;
-                } else {
                     tilecolor[0] = colors[layer][0];
                     tilecolor[1] = colors[layer][1];
                     tilecolor[2] = colors[layer][2];
+                } else {
+                    tilecolor[0] = colors[layer][0] * 0.5f;
+                    tilecolor[1] = colors[layer][1] * 0.5f;
+                    tilecolor[2] = colors[layer][2] * 0.5f;
                 }
 
                 if (tile == TILE_CENTRE) {
@@ -1117,7 +1118,7 @@ freesegmesh(FreeSegment *seg)
                         uv[0] = wireuvs[0][i * 2 + 0];
                         uv[1] = wireuvs[0][i * 2 + 1];
                         vbufaddvertex(vbo, vert, uv, norm);
-                        veclistpush(&seg->colors, colors[layer]);
+                        veclistpush(&seg->colors, tilecolor);
                     }
                     SET_INDEX(index, idxcount, 0, 1, 2);
                     vbufaddindex(vbo, index);
@@ -1470,105 +1471,6 @@ selboxmesh(SelectBox *box)
 
     vbufbind(vbo);
 }
-/*
-void
-vbopushquad(VBuffer *vbo, float x_min, float y_min,
-        float x_max, float y_max, float depth, float uvs[8])
-{
-    vec3 vert;
-    vec2 uv;
-    vec3 norm = {0.0f, 0.0f, 1.0f};
-    ivec3 index;
-    int idxcount = vbo->indxcount / 3;
-
-    vert[2] = depth;
-
-    vert[0] = x_max;
-    vert[1] = y_min;
-    uv[0] = uvs[0];
-    uv[1] = uvs[1];
-    vbufaddvertex(vbo, vert, uv, norm);
-
-    vert[0] = x_min;
-    vert[1] = y_min;
-    uv[0] = uvs[2];
-    uv[1] = uvs[3];
-    vbufaddvertex(vbo, vert, uv, norm);
-
-    vert[0] = x_min;
-    vert[1] = y_max;
-    uv[0] = uvs[4];
-    uv[1] = uvs[5];
-    vbufaddvertex(vbo, vert, uv, norm);
-
-    vert[0] = x_max;
-    vert[1] = y_max;
-    uv[0] = uvs[6];
-    uv[1] = uvs[7];
-    vbufaddvertex(vbo, vert, uv, norm);
-
-    index[0] = idxcount + 0;
-    index[1] = idxcount + 1;
-    index[2] = idxcount + 2;
-    vbufaddindex(vbo, index);
-
-    index[0] = idxcount + 2;
-    index[1] = idxcount + 3;
-    index[2] = idxcount + 0;
-    vbufaddindex(vbo, index);
-
-    vbo->indxcount += 12;
-}
-    
-void
-vbopushquadinverted(VBuffer *vbo, float x_min, float y_min,
-        float x_max, float y_max, float depth, float uvs[8])
-{
-    vec3 vert;
-    vec2 uv;
-    vec3 norm = {0, 0, 1};
-    ivec3 index;
-    int indexbase = vbo->indxcount / 3;
-
-    vert[2] = depth;
-
-    vert[1] = x_max;
-    vert[0] = y_min;
-    uv[0] = uvs[0];
-    uv[1] = uvs[1];
-    vbufaddvertex(vbo, vert, uv, norm);
-
-    vert[1] = x_min;
-    vert[0] = y_min;
-    uv[0] = uvs[2];
-    uv[1] = uvs[3];
-    vbufaddvertex(vbo, vert, uv, norm);
-
-    vert[1] = x_min;
-    vert[0] = y_max;
-    uv[0] = uvs[4];
-    uv[1] = uvs[5];
-    vbufaddvertex(vbo, vert, uv, norm);
-
-    vert[1] = x_max;
-    vert[0] = y_max;
-    uv[0] = uvs[6];
-    uv[1] = uvs[7];
-    vbufaddvertex(vbo, vert, uv, norm);
-
-    index[0] = indexbase + 0;
-    index[1] = indexbase + 1;
-    index[2] = indexbase + 2;
-    vbufaddindex(vbo, index);
-
-    index[0] = indexbase + 2;
-    index[1] = indexbase + 3;
-    index[2] = indexbase + 0;
-    vbufaddindex(vbo, index);
-
-    vbo->indxcount += 12;
-}
-*/
 
 void
 fullremesh(void)
@@ -1659,7 +1561,6 @@ freesegmerge(FreeSegment *seg, int x, int y)
     /* Check for package overlaps */
     for (l = 0; l < seg->packs->size; l++) {
         pack = listat(seg->packs, l);
-
 
         for (i = (x + pack->x) / SEGMENT_SIZE;
                 i <= (x + pack->x + pack->w) / SEGMENT_SIZE; i++) {
@@ -1875,7 +1776,7 @@ guibuttonnotdown(GUIElement *elem, ...)
 
     guisetbacktexture(elem, 384, 0, 64, 64);
 
-    if (mousemode == MOUSE_NONE) {
+    if (mousemode == MOUSE_NONE && currentwire == WIRE_NONE) {
         mousegetstate(&mx, &my);
         cam = getmaincamera();
         mx = cam->ent.x + (mx - (cam->width / 2.0)) / (cam->zoom / 2.0);
@@ -1902,7 +1803,7 @@ guibuttonordown(GUIElement *elem, ...)
 
     guisetbacktexture(elem, 384, 0, 64, 64);
 
-    if (mousemode == MOUSE_NONE) {
+    if (mousemode == MOUSE_NONE && currentwire == WIRE_NONE) {
         mousegetstate(&mx, &my);
         cam = getmaincamera();
         mx = cam->ent.x + (mx - (cam->width / 2.0)) / (cam->zoom / 2.0);
@@ -1929,7 +1830,7 @@ guibuttonanddown(GUIElement *elem, ...)
 
     guisetbacktexture(elem, 384, 0, 64, 64);
 
-    if (mousemode == MOUSE_NONE) {
+    if (mousemode == MOUSE_NONE && currentwire == WIRE_NONE) {
         mousegetstate(&mx, &my);
         cam = getmaincamera();
         mx = cam->ent.x + (mx - (cam->width / 2.0)) / (cam->zoom / 2.0);
@@ -1955,7 +1856,7 @@ guibuttonxordown(GUIElement *elem, ...)
 
     guisetbacktexture(elem, 384, 0, 64, 64);
 
-    if (mousemode == MOUSE_NONE) {
+    if (mousemode == MOUSE_NONE && currentwire == WIRE_NONE) {
         mousegetstate(&mx, &my);
         cam = getmaincamera();
         mx = cam->ent.x + (mx - (cam->width / 2.0)) / (cam->zoom / 2.0);
