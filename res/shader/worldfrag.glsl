@@ -13,5 +13,8 @@ void main()
 {
     vec4 matdiffuse = texture2D(albedo_map, uvout).rgba;
 
+    if (matdiffuse.a < 0.1)
+        discard;
+
     Color = vec4(matdiffuse.rgb * wirecolor, matdiffuse.a);
 }
