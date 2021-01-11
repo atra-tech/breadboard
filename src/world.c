@@ -41,6 +41,7 @@ static void layermesh(Segment *seg, Layer *layer, const float *color, uint depth
 static void wirecalcuvs(void);
 static void wiremovetotop(uint wire);
 static void guitoolbarcreate(void);
+static void guiutilbarcreate(void);
 static void fullremesh(void);
 static void selboxinit(SelectBox *box);
 static void selboxmesh(SelectBox *box);
@@ -51,7 +52,8 @@ static int pointintersectsquad(float px, float py,
 static int quadintersectsquad(float ax, float ay, float aw, float ah,
         float bx, float by, float bw, float bh);
 static void drawtext(VBuffer *vbo, VecList *colors, const char *text,
-        uint fontsize, float x_min, float x_max, float y_min, float y_max);
+        uint fontsize, const float *color, float x_min, float x_max,
+        float y_min, float y_max);
 static void vbopushquad(VBuffer *vbo, float x_min, float y_min,
         float x_max, float y_max, float depth, float uvs[8]);
 static void vbopushquadinverted(VBuffer *vbo, float x_min, float y_min,
@@ -117,6 +119,7 @@ static const float colorblue[]  = {0.2f, 0.4f, 1.0f};
 static const float *colors[] = {colorred, colorgreen, colorblue};
 static const float packtextcolor[] = {0.83f, 0.80f, 0.80f};
 static const float selectboxcolor[] = {1.0f, 0.7f, 0.0f, 1.0f};
+static const float tileerrorcolor[] = {1.0f, 0.1f, 0.0f, 0.4f};
 
 static int init = 0;
 static Stack *worldstack;
@@ -133,6 +136,8 @@ static uint currentwire;
 static uint mousemode;
 static uint wireorder[3];
 static float packuvs[PACKTEX_TOTAL * 8];
+static float inpackuvs[2 * 8];
+static float outpackuvs[2 * 8];
 static float pinuvs[PINTEX_TOTAL * 8];
 static float selboxedgeuvs[8];
 static float selboxcorneruvs[8];
@@ -181,6 +186,12 @@ worldstart(void)
     texget(&circuittex, 5, 0, packuvs + PACKTEX_1H_CENTRE * 8);
     texget(&circuittex, 6, 0, packuvs + PACKTEX_1H_RIGHT * 8);
     texget(&circuittex, 4, 1, packuvs + PACKTEX_1W_1H * 8);
+
+    /* Special Input/Output package texture UVs */
+    texget(&circuittex, 4, 3, inpackuvs + 0);
+    texget(&circuittex, 5, 3, inpackuvs + 8);
+    texget(&circuittex, 6, 3, outpackuvs + 0);
+    texget(&circuittex, 7, 3, outpackuvs + 8);
 
     /* Populate pin package texture UVs */
     for (i = 0; i < PINTEX_TOTAL; i++) {
@@ -366,14 +377,18 @@ selboxdelete(SelectBox *box)
     vbufdelete(&box->vbo);
 }
 
+/* TODO: Rework to use world stack via simstate.
+ * Either that or remove all world params and make */
 void
 worldhandle(World *world, Event *e)
 {
     static int prev_mx = 0, prev_my = 0;
     int mx, my;
-    float wmx, wmy;
-    uint mstate;
+    float wmx, wmy, px, py;
+    uint i, mstate;
     Camera *cam;
+    Segment *seg;
+    Package *pack;
 
     mstate = mousegetstate(&mx, &my);
     cam = getmaincamera();
@@ -384,12 +399,33 @@ worldhandle(World *world, Event *e)
 
     worldhandlekeys(e);
 
+
     if (e->type == SDL_MOUSEBUTTONDOWN) {
         if (e->button.button == SDL_BUTTON_LEFT) {
-            //TODO: Check for selection box under cursor
-            //Check for IC pack under cursor
+            
+            /* Handle input pack toggling */
+            if (!selbox.enabled) {
+                seg = worldgetsegmentat(mainworld, wmx, wmy);
+                for (i = 0; i < seg->packs->size; i++) {
+                    pack = listat(seg->packs, i);
 
-            /* TODO: What is this currentwire check for?  Move it */
+                    if (pack->type == PACK_INPUT) {
+                        px = seg->x * SEGMENT_SIZE + pack->x;
+                        py = seg->y * SEGMENT_SIZE + pack->y;
+
+                        if (pointintersectsquad(wmx, wmy, 
+                                    px, py, pack->w, pack->h)) {
+                            pack->state = !pack->state;
+                            pack->changed = 1;
+                            seg->dirty = 1;
+                            prev_mx = mx;
+                            prev_my = my;
+                            return;
+                        }
+                    }
+                }
+            }
+
             if (currentwire != WIRE_NONE) {
                 mousemode = MOUSE_DRAW;
             } else if (mousemode == MOUSE_GRAB) {
@@ -438,15 +474,22 @@ worldhandle(World *world, Event *e)
     } else if (e->type == SDL_MOUSEBUTTONUP) {
         if (e->button.button == SDL_BUTTON_LEFT) {
             if (mousemode == MOUSE_DRAGBOX) {
+                mousemode = MOUSE_BOXREADY;
                 if (selbox.w < 0) {
                     selbox.x += selbox.w;
                     selbox.w = abs(selbox.w);
+                } else if (selbox.w == 0) {
+                    selbox.enabled = 0;
+                    mousemode = MOUSE_NONE;
                 }
+
                 if (selbox.h < 0) {
                     selbox.y += selbox.h;
                     selbox.h = abs(selbox.h);
+                } else if (selbox.h == 0) {
+                    selbox.enabled = 0;
+                    mousemode = MOUSE_NONE;
                 }
-                mousemode = MOUSE_BOXREADY;
             } else if (mousemode == MOUSE_DRAW) {
                 mousemode = MOUSE_NONE;
                 circuitrebuild(mainworld, &mainworld->circuit);
@@ -650,6 +693,9 @@ worldupdate(World *world, float dt)
         glm_translate_y(mouseseg->modelmat, tmp_my - 1.0f);
     }
 
+    //circuitclearerrors(mainworld->circuit);
+    circuitresetwireconvs(mainworld->circuit);
+    updateclocktimes(mainworld->circuit, dt);
     circuitupdate(mainworld->circuit, dt);
 }
 
@@ -658,7 +704,7 @@ worldrender(World *world, Camera *cam)
 {
     int seg_x = cam->ent.x / SEGMENT_SIZE;
     int seg_y = cam->ent.y / SEGMENT_SIZE;
-    int i, j, k;
+    int i, j;
     Segment *seg;
 
     /* Render background */
@@ -669,10 +715,8 @@ worldrender(World *world, Camera *cam)
     shaderloadviewmat(&bgshader, cam->viewmat);
     shaderaddint(&bgshader, "albedo_map", 0);
 
-    //glEnable(GL_DEPTH_TEST);
-    //glEnable(GL_CULL_FACE);
+    glEnable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
-    glDisable(GL_DEPTH_TEST);
 
     /* TODO: Change segment render distance to be based on camera zoom 
      * TODO: Rework to use common background VBuffer, since this data is identical for each seg
@@ -738,8 +782,8 @@ worldrender(World *world, Camera *cam)
 
     /* Render selection box */
     if (selbox.enabled) {
-        shaderbind(&indicatorshader);
         vbufbindvao(&selbox.vbo);
+        shaderbind(&indicatorshader);
         shaderloadprojviewmat(&indicatorshader, cam->projviewmat);
         shaderloadviewmat(&indicatorshader, cam->viewmat);
         shaderloadmodelmat(&indicatorshader, selbox.modelmat);
@@ -757,7 +801,6 @@ worldrendermouseseg(Camera *cam)
 {
     if (mouseseg) {
         /* Render packages and wires */
-        glDisable(GL_CULL_FACE);
         glDisable(GL_DEPTH_TEST);
 
         texbind(&circuittex);
@@ -812,12 +855,13 @@ segmentmesh(Segment *seg)
 {
     uint l, x, y, i, j, idxcount, len;
     float x_min, x_max, y_min, y_max;
-    vec3 vert, norm;
+    vec3 vert, norm, textcolor;
     vec2 uv;
     ivec3 index;
     Package *pack;
     Pin *pin;
     float *uvptr;
+    const float *color;
     VBuffer *vbo;
 
     vbufreset(&seg->vbo);
@@ -829,6 +873,7 @@ segmentmesh(Segment *seg)
     /* Draw background */
     idxcount = 0;
     vbo = &seg->vbo;
+    vert[2] = 0.0f;
 
     for (i = 0; i < 4; i++) {
         COPY_VEC(vert, segmentverts, i, 3);
@@ -851,11 +896,25 @@ segmentmesh(Segment *seg)
     
     
     /* Draw packages */
-    for (l = 0; l < seg->packs->size; l++) {
+    vert[2] = 4.0f;
 
+    for (l = 0; l < seg->packs->size; l++) {
         vbo = &seg->wirevbo;
         idxcount = vbo->indxcount / 3;
         pack = listat(seg->packs, l);
+
+        textcolor[0] = packtextcolor[0];
+        textcolor[1] = packtextcolor[1];
+        textcolor[2] = packtextcolor[2];
+
+        if (pack->error) {
+            color = tileerrorcolor;
+            textcolor[0] *= tileerrorcolor[0];
+            textcolor[1] *= tileerrorcolor[1];
+            textcolor[2] *= tileerrorcolor[2];
+        } else {
+            color = colorwhite;
+        }
 
         /* Draw body */
         for (y = 0; y < pack->h; y++) {
@@ -868,7 +927,7 @@ segmentmesh(Segment *seg)
                     uv[0] = uvptr[i * 2 + 0];
                     uv[1] = uvptr[i * 2 + 1];
                     vbufaddvertex(vbo, vert, uv, norm);
-                    veclistpush(&seg->colors, colorwhite);
+                    veclistpush(&seg->colors, color);
                 }
                 SET_INDEX(index, idxcount, 0, 1, 2);
                 vbufaddindex(vbo, index);
@@ -902,7 +961,7 @@ segmentmesh(Segment *seg)
                 uv[0] = uvptr[j * 2 + 0];
                 uv[1] = uvptr[j * 2 + 1];
                 vbufaddvertex(vbo, vert, uv, norm);
-                veclistpush(&seg->colors, colorwhite);
+                veclistpush(&seg->colors, color);
             }
             SET_INDEX(index, idxcount, 0, 1, 2);
             vbufaddindex(vbo, index);
@@ -933,7 +992,7 @@ segmentmesh(Segment *seg)
                 uv[0] = uvptr[j * 2 + 0];
                 uv[1] = uvptr[j * 2 + 1];
                 vbufaddvertex(vbo, vert, uv, norm);
-                veclistpush(&seg->colors, colorwhite);
+                veclistpush(&seg->colors, color);
             }
             SET_INDEX(index, idxcount, 0, 1, 2);
             vbufaddindex(vbo, index);
@@ -945,55 +1004,59 @@ segmentmesh(Segment *seg)
         }
 
         /* Draw text */
-        vbo = &seg->textvbo;
-        idxcount = vbo->indxcount / 3;
+        if (pack->type != PACK_INPUT && pack->type != PACK_OUTPUT) {
+            vbo = &seg->textvbo;
+            idxcount = vbo->indxcount / 3;
 
-        /* Body text */
-        len = strlen(pack->name);
-        x_min = (pack->x + (pack->w * 0.5f)) - 
-            ((PACK_FONT_SIZE + FONT_GAP) * len - FONT_GAP) * PIX_SIZE * 0.5f;
-        y_min = (pack->y + (pack->h * 0.5f)) -
-            PACK_FONT_SIZE * PIX_SIZE * 0.5f;
-        x_max = x_min + PACK_FONT_SIZE * PIX_SIZE;
-        y_max = y_min + PACK_FONT_SIZE * PIX_SIZE;
+            /* Body text */
+            len = strlen(pack->name);
+            x_min = (pack->x + (pack->w * 0.5f)) - 
+                ((PACK_FONT_SIZE + FONT_GAP) * len - FONT_GAP) *
+                PIX_SIZE * 0.5f;
+            y_min = (pack->y + (pack->h * 0.5f)) -
+                PACK_FONT_SIZE * PIX_SIZE * 0.5f;
+            x_max = x_min + PACK_FONT_SIZE * PIX_SIZE;
+            y_max = y_min + PACK_FONT_SIZE * PIX_SIZE;
 
-        drawtext(vbo, &seg->textcolors, pack->name,
-                PACK_FONT_SIZE, x_min, x_max, y_min, y_max);
-                
-        /* Pin Text */
-        x_min = (pack->x + 6 * PIX_SIZE);
-        x_max = x_min + PIN_FONT_SIZE * PIX_SIZE;
-        y_min = (pack->y + pack->h) - 0.5f -
-            PIN_FONT_SIZE * PIX_SIZE * 0.5f;
-        y_max = y_min + PIN_FONT_SIZE * PIX_SIZE;
+            drawtext(vbo, &seg->textcolors, pack->name,
+                PACK_FONT_SIZE, textcolor, x_min, x_max, y_min, y_max);
 
-        for (i = 0; i < pack->in_pins.size; i++) {
-            pin = dlistat(&pack->in_pins, i);
-            len = strlen(pin->name);
-
-            drawtext(vbo, &seg->textcolors, pin->name,
-                    PIN_FONT_SIZE, x_min, x_max, y_min, y_max);
-
-            y_min -= 1.0f;
-            y_max -= 1.0f;
-        }
-        y_min = (pack->y + pack->h) - 0.5f -
-            PIN_FONT_SIZE * PIX_SIZE * 0.5f;
-        y_max = y_min + PIN_FONT_SIZE * PIX_SIZE;
-
-        for (i = 0; i < pack->out_pins.size; i++) {
-            pin = dlistat(&pack->out_pins, i);
-            len = strlen(pin->name);
-
-            x_min = (pack->x + pack->w) - 6 * PIX_SIZE -
-                ((PIN_FONT_SIZE + FONT_GAP) * len - FONT_GAP) * PIX_SIZE;
+            /* Pin Text */
+            x_min = (pack->x + 6 * PIX_SIZE);
             x_max = x_min + PIN_FONT_SIZE * PIX_SIZE;
-            
-            drawtext(vbo, &seg->textcolors, pin->name,
-                    PIN_FONT_SIZE, x_min, x_max, y_min, y_max);
+            y_min = (pack->y + pack->h) - 0.5f -
+                PIN_FONT_SIZE * PIX_SIZE * 0.5f;
+            y_max = y_min + PIN_FONT_SIZE * PIX_SIZE;
 
-            y_min -= 1.0f;
-            y_max -= 1.0f;
+            for (i = 0; i < pack->in_pins.size; i++) {
+                pin = dlistat(&pack->in_pins, i);
+                len = strlen(pin->name);
+
+                drawtext(vbo, &seg->textcolors, pin->name,
+                    PIN_FONT_SIZE, textcolor, x_min, x_max, y_min, y_max);
+
+                y_min -= 1.0f;
+                y_max -= 1.0f;
+            }
+            y_min = (pack->y + pack->h) - 0.5f -
+                PIN_FONT_SIZE * PIX_SIZE * 0.5f;
+            y_max = y_min + PIN_FONT_SIZE * PIX_SIZE;
+
+            for (i = 0; i < pack->out_pins.size; i++) {
+                pin = dlistat(&pack->out_pins, i);
+                len = strlen(pin->name);
+
+                x_min = (pack->x + pack->w) - 6 * PIX_SIZE -
+                    ((PIN_FONT_SIZE + FONT_GAP) * len - FONT_GAP) *
+                    PIX_SIZE;
+                x_max = x_min + PIN_FONT_SIZE * PIX_SIZE;
+
+                drawtext(vbo, &seg->textcolors, pin->name,
+                    PIN_FONT_SIZE, textcolor, x_min, x_max, y_min, y_max);
+
+                y_min -= 1.0f;
+                y_max -= 1.0f;
+            }
         }
     }
     vbufbind(&seg->vbo);
@@ -1018,18 +1081,18 @@ layermesh(Segment *seg, Layer *layer, const float *color, uint depth)
         for (j = 0; j < SEGMENT_SIZE; j++) {
             tile = layer->tiles[j + i * SEGMENT_SIZE].state;
 
-            if (!tile) continue;
+            if (!(tile & 0x1F)) continue;
             
             if (tile & TILE_POWERED) {
-                tilecolor[0] = color[0];
-                tilecolor[1] = color[1];
-                tilecolor[2] = color[2];
+                tilecolor[0] = color[0] * 1.25f;
+                tilecolor[1] = color[1] * 1.25f;
+                tilecolor[2] = color[2] * 1.25f;
             } else {
                 tilecolor[0] = color[0] * 0.5f;
                 tilecolor[1] = color[1] * 0.5f;
                 tilecolor[2] = color[2] * 0.5f;
             }
-
+            
             if (tile == TILE_CENTRE) {
                 for (k = 0; k < 4; k++) {
                     vert[0] = i + tileverts[k * 3 + 0];
@@ -1099,12 +1162,12 @@ freesegmesh(FreeSegment *seg)
             for (y = 0; y < seg->h; y++) {
                 tile = seg->tiles[layer][x * seg->h + y].state & 0x1F;
 
-                if (!tile) continue;
+                if (!(tile & 0x1F)) continue;
 
                 if (tile & TILE_POWERED) {
-                    tilecolor[0] = colors[layer][0];
-                    tilecolor[1] = colors[layer][1];
-                    tilecolor[2] = colors[layer][2];
+                    tilecolor[0] = colors[layer][0] * 1.25f;
+                    tilecolor[1] = colors[layer][1] * 1.25f;
+                    tilecolor[2] = colors[layer][2] * 1.25f;
                 } else {
                     tilecolor[0] = colors[layer][0] * 0.5f;
                     tilecolor[1] = colors[layer][1] * 0.5f;
@@ -1152,10 +1215,10 @@ freesegmesh(FreeSegment *seg)
 
     /* Draw packages */
     for (l = 0; l < seg->packs->size; l++) {
-
         vbo = &seg->wirevbo;
         idxcount = vbo->indxcount / 3;
         pack = listat(seg->packs, l);
+        vert[2] = 4.0f;
 
         /* Draw body */
         for (y = 0; y < pack->h; y++) {
@@ -1245,55 +1308,59 @@ freesegmesh(FreeSegment *seg)
         }
 
         /* Draw text */
-        vbo = &seg->textvbo;
-        idxcount = vbo->indxcount / 3;
+        if (pack->type != PACK_INPUT && pack->type != PACK_OUTPUT) {
+            vbo = &seg->textvbo;
+            idxcount = vbo->indxcount / 3;
 
-        /* Body text */
-        len = strlen(pack->name);
-        x_min = (pack->x + (pack->w * 0.5f)) - 
-            ((PACK_FONT_SIZE + FONT_GAP) * len - FONT_GAP) * PIX_SIZE * 0.5f;
-        y_min = (pack->y + (pack->h * 0.5f)) -
-            PACK_FONT_SIZE * PIX_SIZE * 0.5f;
-        x_max = x_min + PACK_FONT_SIZE * PIX_SIZE;
-        y_max = y_min + PACK_FONT_SIZE * PIX_SIZE;
+            /* Body text */
+            len = strlen(pack->name);
+            x_min = (pack->x + (pack->w * 0.5f)) - 
+                ((PACK_FONT_SIZE + FONT_GAP) * len - FONT_GAP) *
+                PIX_SIZE * 0.5f;
+            y_min = (pack->y + (pack->h * 0.5f)) -
+                PACK_FONT_SIZE * PIX_SIZE * 0.5f;
+            x_max = x_min + PACK_FONT_SIZE * PIX_SIZE;
+            y_max = y_min + PACK_FONT_SIZE * PIX_SIZE;
 
-        drawtext(vbo, &seg->textcolors, pack->name,
-                PACK_FONT_SIZE, x_min, x_max, y_min, y_max);
-                
-        /* Pin Text */
-        x_min = (pack->x + 6 * PIX_SIZE);
-        x_max = x_min + PIN_FONT_SIZE * PIX_SIZE;
-        y_min = (pack->y + pack->h) - 0.5f -
-            PIN_FONT_SIZE * PIX_SIZE * 0.5f;
-        y_max = y_min + PIN_FONT_SIZE * PIX_SIZE;
+            drawtext(vbo, &seg->textcolors, pack->name,
+                PACK_FONT_SIZE, packtextcolor, x_min, x_max, y_min, y_max);
 
-        for (i = 0; i < pack->in_pins.size; i++) {
-            pin = dlistat(&pack->in_pins, i);
-            len = strlen(pin->name);
-
-            drawtext(vbo, &seg->textcolors, pin->name,
-                    PIN_FONT_SIZE, x_min, x_max, y_min, y_max);
-
-            y_min -= 1.0f;
-            y_max -= 1.0f;
-        }
-        y_min = (pack->y + pack->h) - 0.5f -
-            PIN_FONT_SIZE * PIX_SIZE * 0.5f;
-        y_max = y_min + PIN_FONT_SIZE * PIX_SIZE;
-
-        for (i = 0; i < pack->out_pins.size; i++) {
-            pin = dlistat(&pack->out_pins, i);
-            len = strlen(pin->name);
-
-            x_min = (pack->x + pack->w) - 6 * PIX_SIZE -
-                ((PIN_FONT_SIZE + FONT_GAP) * len - FONT_GAP) * PIX_SIZE;
+            /* Pin Text */
+            x_min = (pack->x + 6 * PIX_SIZE);
             x_max = x_min + PIN_FONT_SIZE * PIX_SIZE;
-            
-            drawtext(vbo, &seg->textcolors, pin->name,
-                    PIN_FONT_SIZE, x_min, x_max, y_min, y_max);
+            y_min = (pack->y + pack->h) - 0.5f -
+                PIN_FONT_SIZE * PIX_SIZE * 0.5f;
+            y_max = y_min + PIN_FONT_SIZE * PIX_SIZE;
 
-            y_min -= 1.0f;
-            y_max -= 1.0f;
+            for (i = 0; i < pack->in_pins.size; i++) {
+                pin = dlistat(&pack->in_pins, i);
+                len = strlen(pin->name);
+
+                drawtext(vbo, &seg->textcolors, pin->name,
+                    PIN_FONT_SIZE, packtextcolor, x_min, x_max, y_min, y_max);
+
+                y_min -= 1.0f;
+                y_max -= 1.0f;
+            }
+            y_min = (pack->y + pack->h) - 0.5f -
+                PIN_FONT_SIZE * PIX_SIZE * 0.5f;
+            y_max = y_min + PIN_FONT_SIZE * PIX_SIZE;
+
+            for (i = 0; i < pack->out_pins.size; i++) {
+                pin = dlistat(&pack->out_pins, i);
+                len = strlen(pin->name);
+
+                x_min = (pack->x + pack->w) - 6 * PIX_SIZE -
+                    ((PIN_FONT_SIZE + FONT_GAP) * len - FONT_GAP) *
+                    PIX_SIZE;
+                x_max = x_min + PIN_FONT_SIZE * PIX_SIZE;
+
+                drawtext(vbo, &seg->textcolors, pin->name,
+                    PIN_FONT_SIZE, packtextcolor, x_min, x_max, y_min, y_max);
+
+                y_min -= 1.0f;
+                y_max -= 1.0f;
+            }
         }
     }
     vbufbind(&seg->wirevbo);
@@ -1306,6 +1373,22 @@ void
 calcpackuvs(Package *pack, uint x, uint y, float **uvs)
 {
     uint texpos;
+
+    if (pack->type == PACK_INPUT) {
+        if (pack->state) {
+            *uvs = inpackuvs + 8;
+        } else {
+            *uvs = inpackuvs;
+        }
+        return;
+    } else if (pack->type == PACK_OUTPUT) {
+        if (pack->state) {
+            *uvs = outpackuvs + 8;
+        } else {
+            *uvs = outpackuvs;
+        }
+        return;
+    }
 
     if (pack->w == 1) {
         if (pack->h == 1) {
@@ -1359,7 +1442,7 @@ calcpackuvs(Package *pack, uint x, uint y, float **uvs)
 
 void
 drawtext(VBuffer *vbo, VecList *colors, const char *text, uint fontsize,
-        float x_min, float x_max, float y_min, float y_max)
+        const float *color, float x_min, float x_max, float y_min, float y_max)
 {
     uint i, len, idxcount;
     vec3 vert, norm = {0.0f, 0.0f, 1.0f};
@@ -1369,7 +1452,7 @@ drawtext(VBuffer *vbo, VecList *colors, const char *text, uint fontsize,
 
     idxcount = vbo->indxcount / 3;
     len = strlen(text);
-    vert[2] = 0.0f;
+    vert[2] = 5.0f;
 
     for (i = 0; i < len; i++) {
         chr = text[i];
@@ -1379,28 +1462,28 @@ drawtext(VBuffer *vbo, VecList *colors, const char *text, uint fontsize,
         uv[0] = fonttex.uvs[chr][0];
         uv[1] = fonttex.uvs[chr][1];
         vbufaddvertex(vbo, vert, uv, norm);
-        veclistpush(colors, packtextcolor);
+        veclistpush(colors, color);
 
         vert[0] = x_min;
         vert[1] = y_min;
         uv[0] = fonttex.uvs[chr][2];
         uv[1] = fonttex.uvs[chr][3];
         vbufaddvertex(vbo, vert, uv, norm);
-        veclistpush(colors, packtextcolor);
+        veclistpush(colors, color);
 
         vert[0] = x_min;
         vert[1] = y_max;
         uv[0] = fonttex.uvs[chr][4];
         uv[1] = fonttex.uvs[chr][5];
         vbufaddvertex(vbo, vert, uv, norm);
-        veclistpush(colors, packtextcolor);
+        veclistpush(colors, color);
 
         vert[0] = x_max;
         vert[1] = y_max;
         uv[0] = fonttex.uvs[chr][6];
         uv[1] = fonttex.uvs[chr][7];
         vbufaddvertex(vbo, vert, uv, norm);
-        veclistpush(colors, packtextcolor);
+        veclistpush(colors, color);
 
         x_min += (fontsize + FONT_GAP) * PIX_SIZE;
         x_max += (fontsize + FONT_GAP) * PIX_SIZE;
@@ -1415,6 +1498,8 @@ drawtext(VBuffer *vbo, VecList *colors, const char *text, uint fontsize,
     }
 }
 
+
+
 void
 selboxmesh(SelectBox *box)
 {
@@ -1428,7 +1513,7 @@ selboxmesh(SelectBox *box)
 
     vbo = &box->vbo;
     idxcount = 0;
-    vert[2] = 0.0f;
+    vert[2] = 7.0f;
 
     vbufreset(vbo);
 
@@ -1517,9 +1602,6 @@ freesegbuild(uint x, uint y, uint w, uint h, uint clearsrc)
             tmpseg = worldgetsegment(mainworld, i, j);
             
             for (l = 0; l < tmpseg->packs->size; l++) {
-                //listpushback(seg->packs, listat(tmpseg->packs, l));
-                //Check intersection
-                //  Add to list if intersecting pack
                 pack = listat(tmpseg->packs, l);
                 wx = pack->x + tmpseg->x * SEGMENT_SIZE;
                 wy = pack->y + tmpseg->y * SEGMENT_SIZE;
@@ -1593,6 +1675,7 @@ freesegmerge(FreeSegment *seg, int x, int y)
         }
     }
 
+    /* Merge segment */
     for (l = 0; l < seg->packs->size; l++) {
         pack = listat(seg->packs, l);
         wx = x + pack->x;
@@ -1601,6 +1684,7 @@ freesegmerge(FreeSegment *seg, int x, int y)
         
         pack->x = pack->x + (x - (tmpseg->x * SEGMENT_SIZE));
         pack->y = pack->y + (y - (tmpseg->y * SEGMENT_SIZE));
+        pack->seg = tmpseg;
         listpushback(tmpseg->packs, pack);
         tmpseg->dirty = 1;
     }
@@ -1715,6 +1799,10 @@ static void guibuttonnotdown(GUIElement *elem, ...);
 static void guibuttonordown(GUIElement *elem, ...);
 static void guibuttonanddown(GUIElement *elem, ...);
 static void guibuttonxordown(GUIElement *elem, ...);
+static void guibuttonindown(GUIElement *elem, ...);
+static void guibuttonoutdown(GUIElement *elem, ...);
+static void guibuttonclockdown(GUIElement *elem, ...);
+static void guibuttonmemorydown(GUIElement *elem, ...);
 
 static void guibuttonreddown(GUIElement *elem, ...);
 static void guibuttongreendown(GUIElement *elem, ...);
@@ -1738,7 +1826,46 @@ enum gui_toolbar_buttons {
     BUTTON_RED,
     BUTTON_GREEN,
     BUTTON_BLUE,
+    BUTTON_INPUT,
+    BUTTON_OUTPUT,
+    BUTTON_CLOCK,
+    BUTTON_MEMORY,
     BUTTON_TOTAL
+};
+
+#define TOOLBAR_W       0.05f * BUTTON_TOTAL
+#define TOOLBAR_H       0.1f
+#define TOOLBAR_X       0.5f - (TOOLBAR_W / 2.0f)
+#define TOOLBAR_Y       0.0f
+#define TOOLBAR_BTN_W   1.0f / BUTTON_TOTAL
+#define TOOLBAR_BTN_H   1.0f
+
+const char *toolbarnames[] = {
+    "toolbar_not",
+    "toolbar_or",
+    "toolbar_and",
+    "toolbar_xor",
+    "toolbar_red",
+    "toolbar_green",
+    "toolbar_blue",
+    "toolbar_input",
+    "toolbar_output",
+    "toolbar_clock",
+    "toolbar_memory"
+};
+
+const char *toolbariconnames[] = {
+    "toolbar_not_icon",
+    "toolbar_or_icon",
+    "toolbar_and_icon",
+    "toolbar_xor_icon",
+    "toolbar_red_icon",
+    "toolbar_green_icon",
+    "toolbar_blue_icon",
+    "toolbar_input_icon",
+    "toolbar_output_icon",
+    "toolbar_clock_icon",
+    "toolbar_memory_icon"
 };
 
 void
@@ -1769,72 +1896,54 @@ guibuttonmouseup(GUIElement *elem, ...)
 void
 guibuttonnotdown(GUIElement *elem, ...)
 {
-    Camera *cam;
     FreeSegment *seg;
     Package *pack;
-    int mx, my;
 
-    guisetbacktexture(elem, 384, 0, 64, 64);
-
-    if (mousemode == MOUSE_NONE && currentwire == WIRE_NONE) {
-        mousegetstate(&mx, &my);
-        cam = getmaincamera();
-        mx = cam->ent.x + (mx - (cam->width / 2.0)) / (cam->zoom / 2.0);
-        my = cam->ent.y + (my - (cam->height / 2.0)) / (cam->zoom / 2.0);
+    if ((mousemode == MOUSE_NONE || mousemode == MOUSE_BOXREADY) &&
+            currentwire == WIRE_NONE) {
+        guisetbacktexture(elem, 384, 0, 64, 64);
         seg = malloc(sizeof(FreeSegment));
-        freeseginit(seg, mx, my, GATE_NOT_W, GATE_NOT_H);
+        freeseginit(seg, 0, 0, GATE_NOT_W, GATE_NOT_H);
         pack = packcreate(PACK_NOT, NULL);
         listpushback(seg->packs, pack);
         freesegmesh(seg);
         mouseseg = seg;
         mousemode = MOUSE_GRAB;
-
+        elem->layer->dirty = 1;
+        selbox.enabled = 0;
     }
-    elem->layer->dirty = 1;
 }
 
 void
 guibuttonordown(GUIElement *elem, ...)
 {
-    Camera *cam;
     FreeSegment *seg;
     Package *pack;
-    int mx, my;
 
-    guisetbacktexture(elem, 384, 0, 64, 64);
-
-    if (mousemode == MOUSE_NONE && currentwire == WIRE_NONE) {
-        mousegetstate(&mx, &my);
-        cam = getmaincamera();
-        mx = cam->ent.x + (mx - (cam->width / 2.0)) / (cam->zoom / 2.0);
-        my = cam->ent.y + (my - (cam->height / 2.0)) / (cam->zoom / 2.0);
+    if ((mousemode == MOUSE_NONE || mousemode == MOUSE_BOXREADY) &&
+            currentwire == WIRE_NONE) {
+        guisetbacktexture(elem, 384, 0, 64, 64);
         seg = malloc(sizeof(FreeSegment));
-        freeseginit(seg, mx, my, GATE_OR_W, GATE_OR_H);
+        freeseginit(seg, 0, 0, GATE_OR_W, GATE_OR_H);
         pack = packcreate(PACK_OR, NULL);
         listpushback(seg->packs, pack);
         freesegmesh(seg);
         mouseseg = seg;
         mousemode = MOUSE_GRAB;
-
+        elem->layer->dirty = 1;
+        selbox.enabled = 0;
     }
-    elem->layer->dirty = 1;
 }
 
 void
 guibuttonanddown(GUIElement *elem, ...)
 {   
-    Camera *cam;
     FreeSegment *seg;
     Package *pack;
-    int mx, my;
 
-    guisetbacktexture(elem, 384, 0, 64, 64);
-
-    if (mousemode == MOUSE_NONE && currentwire == WIRE_NONE) {
-        mousegetstate(&mx, &my);
-        cam = getmaincamera();
-        mx = cam->ent.x + (mx - (cam->width / 2.0)) / (cam->zoom / 2.0);
-        my = cam->ent.y + (my - (cam->height / 2.0)) / (cam->zoom / 2.0);
+    if ((mousemode == MOUSE_NONE || mousemode == MOUSE_BOXREADY) &&
+            currentwire == WIRE_NONE) {
+        guisetbacktexture(elem, 384, 0, 64, 64);
         seg = malloc(sizeof(FreeSegment));
         freeseginit(seg, 0, 0, GATE_AND_W, GATE_AND_H);
         pack = packcreate(PACK_AND, NULL);
@@ -1842,34 +1951,114 @@ guibuttonanddown(GUIElement *elem, ...)
         freesegmesh(seg);
         mouseseg = seg;
         mousemode = MOUSE_GRAB;
+        elem->layer->dirty = 1;
+        selbox.enabled = 0;
     }
-    elem->layer->dirty = 1;
 }
 
 void
 guibuttonxordown(GUIElement *elem, ...)
 {
-    Camera *cam;
     FreeSegment *seg;
     Package *pack;
-    int mx, my;
 
-    guisetbacktexture(elem, 384, 0, 64, 64);
-
-    if (mousemode == MOUSE_NONE && currentwire == WIRE_NONE) {
-        mousegetstate(&mx, &my);
-        cam = getmaincamera();
-        mx = cam->ent.x + (mx - (cam->width / 2.0)) / (cam->zoom / 2.0);
-        my = cam->ent.y + (my - (cam->height / 2.0)) / (cam->zoom / 2.0);
+    if ((mousemode == MOUSE_NONE || mousemode == MOUSE_BOXREADY) &&
+            currentwire == WIRE_NONE) {
+        guisetbacktexture(elem, 384, 0, 64, 64);
         seg = malloc(sizeof(FreeSegment));
-        freeseginit(seg, mx, my, GATE_XOR_W, GATE_XOR_H);
+        freeseginit(seg, 0, 0, GATE_XOR_W, GATE_XOR_H);
         pack = packcreate(PACK_XOR, NULL);
         listpushback(seg->packs, pack);
         freesegmesh(seg);
         mouseseg = seg;
         mousemode = MOUSE_GRAB;
+        elem->layer->dirty = 1;
+        selbox.enabled = 0;
     }
-    elem->layer->dirty = 1;
+}
+
+void
+guibuttonindown(GUIElement *elem, ...)
+{
+    FreeSegment *seg;
+    Package *pack;
+
+    if ((mousemode == MOUSE_NONE || mousemode == MOUSE_BOXREADY) &&
+            currentwire == WIRE_NONE) {
+        guisetbacktexture(elem, 384, 0, 64, 64);
+        seg = malloc(sizeof(FreeSegment));
+        freeseginit(seg, 0, 0, PACK_IN_W, PACK_IN_H);
+        pack = packcreate(PACK_INPUT, NULL);
+        listpushback(seg->packs, pack);
+        freesegmesh(seg);
+        mouseseg = seg;
+        mousemode = MOUSE_GRAB;
+        elem->layer->dirty = 1;
+        selbox.enabled = 0;
+    }
+}
+
+void
+guibuttonoutdown(GUIElement *elem, ...)
+{
+    FreeSegment *seg;
+    Package *pack;
+
+    if ((mousemode == MOUSE_NONE || mousemode == MOUSE_BOXREADY) &&
+            currentwire == WIRE_NONE) {
+        guisetbacktexture(elem, 384, 0, 64, 64);
+        seg = malloc(sizeof(FreeSegment));
+        freeseginit(seg, 0, 0, PACK_OUT_W, PACK_OUT_H);
+        pack = packcreate(PACK_OUTPUT, NULL);
+        listpushback(seg->packs, pack);
+        freesegmesh(seg);
+        mouseseg = seg;
+        mousemode = MOUSE_GRAB;
+        elem->layer->dirty = 1;
+        selbox.enabled = 0;
+    }
+}
+
+void
+guibuttonclockdown(GUIElement *elem, ...)
+{
+    FreeSegment *seg;
+    Package *pack;
+
+    if ((mousemode == MOUSE_NONE || mousemode == MOUSE_BOXREADY) &&
+            currentwire == WIRE_NONE) {
+        guisetbacktexture(elem, 384, 0, 64, 64);
+        seg = malloc(sizeof(FreeSegment));
+        freeseginit(seg, 0, 0, PACK_CLK_W, PACK_CLK_H);
+        pack = packcreate(PACK_CLOCK, NULL);
+        listpushback(seg->packs, pack);
+        freesegmesh(seg);
+        mouseseg = seg;
+        mousemode = MOUSE_GRAB;
+        elem->layer->dirty = 1;
+        selbox.enabled = 0;
+    }
+}
+
+void
+guibuttonmemorydown(GUIElement *elem, ...)
+{
+    FreeSegment *seg;
+    Package *pack;
+
+    if ((mousemode == MOUSE_NONE || mousemode == MOUSE_BOXREADY) &&
+            currentwire == WIRE_NONE) {
+        guisetbacktexture(elem, 384, 0, 64, 64);
+        seg = malloc(sizeof(FreeSegment));
+        freeseginit(seg, 0, 0, PACK_MEM_W, PACK_MEM_H);
+        pack = packcreate(PACK_MEMORY, NULL);
+        listpushback(seg->packs, pack);
+        freesegmesh(seg);
+        mouseseg = seg;
+        mousemode = MOUSE_GRAB;
+        elem->layer->dirty = 1;
+        selbox.enabled = 0;
+    }
 }
 
 void
@@ -1877,6 +2066,10 @@ guibuttonreddown(GUIElement *elem, ...)
 {
     GUIElement *green, *blue;
 
+    if (mousemode == MOUSE_BOXREADY) {
+        mousemode = MOUSE_NONE;
+        selbox.enabled = 0;
+    }
     if (mousemode != MOUSE_NONE) {
         return;
     }
@@ -1903,6 +2096,10 @@ guibuttongreendown(GUIElement *elem, ...)
 {
     GUIElement *red, *blue;
 
+    if (mousemode == MOUSE_BOXREADY) {
+        mousemode = MOUSE_NONE;
+        selbox.enabled = 0;
+    }
     if (mousemode != MOUSE_NONE) {
         return;
     }
@@ -1929,6 +2126,10 @@ guibuttonbluedown(GUIElement *elem, ...)
 {
     GUIElement *red, *green;
 
+    if (mousemode == MOUSE_BOXREADY) {
+        mousemode = MOUSE_NONE;
+        selbox.enabled = 0;
+    }
     if (mousemode != MOUSE_NONE) {
         return;
     }
@@ -2029,6 +2230,12 @@ guibuttonbluemouseleave(GUIElement *elem, ...)
 }
 
 void
+guiutilbarcreate(void)
+{
+
+}
+
+void
 guitoolbarcreate(void) 
 {
     uint i;
@@ -2041,116 +2248,47 @@ guitoolbarcreate(void)
             "res/shader/guifrag.glsl",
             "res/texture/gui.png");
 
-    base = guielemcreate(0.325f, 0.0f, 0.35f, 0.1f,
+    base = guielemcreate(TOOLBAR_X, TOOLBAR_Y, TOOLBAR_W, TOOLBAR_H,
             GUI_CUSTOM, GUI_ATTR_HASTEXTURE, "toolbar_base");
 
-    buttons[BUTTON_NOT] = guielemcreate(0.0f, 0.0f, 0.14285f, 1.0f,
+    for (i = 0; i < BUTTON_TOTAL; i++) {
+        buttons[i] = guielemcreate(
+                TOOLBAR_BTN_W * i, 0.0f, TOOLBAR_BTN_W, 1.0f,
+                GUI_CUSTOM,
+                GUI_ATTR_HASTEXTURE |
+                GUI_ATTR_CLICKABLE,
+                toolbarnames[i]);
+        icons[i] = guielemcreate(0.1f, 0.1f, 0.8f, 0.8f,
             GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE |
-            GUI_ATTR_CLICKABLE,
-            "toolbar_not");
+            GUI_ATTR_NOCAPTURE,
+            toolbariconnames[i]);
+    }
     
-    buttons[BUTTON_OR] = guielemcreate(0.14285f, 0.0f, 0.14285f, 1.0f,
-            GUI_CUSTOM,
-            GUI_ATTR_HASTEXTURE |
-            GUI_ATTR_CLICKABLE,
-            "toolbar_or");
-
-    buttons[BUTTON_AND] = guielemcreate(0.28571f, 0.0f, 0.14285f, 1.0f,
-            GUI_CUSTOM,
-            GUI_ATTR_HASTEXTURE |
-            GUI_ATTR_CLICKABLE,
-            "toolbar_and");
-
-    buttons[BUTTON_XOR] = guielemcreate(0.42857f, 0.0f, 0.14285f, 1.0f,
-            GUI_CUSTOM,
-            GUI_ATTR_HASTEXTURE |
-            GUI_ATTR_CLICKABLE,
-            "toolbar_xor");
-
-    buttons[BUTTON_RED] = guielemcreate(0.57143f, 0.0f, 0.14285f, 1.0f,
-            GUI_CUSTOM,
-            GUI_ATTR_HASTEXTURE |
-            GUI_ATTR_CLICKABLE,
-            "toolbar_red");
-
-    buttons[BUTTON_GREEN] = guielemcreate(0.71428f, 0.0f, 0.14285f, 1.0f,
-            GUI_CUSTOM,
-            GUI_ATTR_HASTEXTURE |
-            GUI_ATTR_CLICKABLE,
-            "toolbar_green");
-    
-    buttons[BUTTON_BLUE] = guielemcreate(0.85714f, 0.0f, 0.14285f, 1.0f,
-            GUI_CUSTOM,
-            GUI_ATTR_HASTEXTURE |
-            GUI_ATTR_CLICKABLE,
-            "toolbar_blue");
-    
-    icons[BUTTON_NOT] = guielemcreate(0.1f, 0.1f, 0.8f, 0.8f,
-            GUI_CUSTOM,
-            GUI_ATTR_HASTEXTURE |
-            GUI_ATTR_NOCAPTURE,
-            "toolbar_not_icon");
-    
-    icons[BUTTON_OR] = guielemcreate(0.1f, 0.1f, 0.8f, 0.8f,
-            GUI_CUSTOM,
-            GUI_ATTR_HASTEXTURE |
-            GUI_ATTR_NOCAPTURE,
-            "toolbar_or_icon");
-
-    icons[BUTTON_AND] = guielemcreate(0.1f, 0.1f, 0.8f, 0.8f,
-            GUI_CUSTOM,
-            GUI_ATTR_HASTEXTURE |
-            GUI_ATTR_NOCAPTURE,
-            "toolbar_and_icon");
-
-    icons[BUTTON_XOR] = guielemcreate(0.1f, 0.1f, 0.8f, 0.8f,
-            GUI_CUSTOM,
-            GUI_ATTR_HASTEXTURE |
-            GUI_ATTR_NOCAPTURE,
-            "toolbar_xor_icon");
-
-    icons[BUTTON_RED] = guielemcreate(0.1f, 0.1f, 0.8f, 0.8f,
-            GUI_CUSTOM,
-            GUI_ATTR_HASTEXTURE |
-            GUI_ATTR_NOCAPTURE,
-            "toolbar_red_icon");
-
-    icons[BUTTON_GREEN] = guielemcreate(0.1f, 0.1f, 0.8f, 0.8f,
-            GUI_CUSTOM,
-            GUI_ATTR_HASTEXTURE |
-            GUI_ATTR_NOCAPTURE,
-            "toolbar_blue_icon");
-    
-    icons[BUTTON_BLUE] = guielemcreate(0.1f, 0.1f, 0.8f, 0.8f,
-            GUI_CUSTOM,
-            GUI_ATTR_HASTEXTURE |
-            GUI_ATTR_NOCAPTURE,
-            "toolbar_green_icon");
-
     guilinklayer(base, layer);
-    guiaddelem(base, buttons[BUTTON_NOT]);
-    guiaddelem(base, buttons[BUTTON_OR]);
-    guiaddelem(base, buttons[BUTTON_AND]);
-    guiaddelem(base, buttons[BUTTON_XOR]);
-    guiaddelem(base, buttons[BUTTON_RED]);
-    guiaddelem(base, buttons[BUTTON_GREEN]);
-    guiaddelem(base, buttons[BUTTON_BLUE]);
 
+    for (i = 0; i < BUTTON_TOTAL; i++) {
+        guiaddelem(base, buttons[i]);
+    }
     guisetbacktexture(base, 256, 0, 1, 1);
+    guienableratioresizing(base, 1.0f / BUTTON_TOTAL);
 
     for (i = 0; i < BUTTON_TOTAL; i++) {
         guiaddelem(buttons[i], icons[i]);
         guisetbacktexture(buttons[i], 256, 0, 64, 64);
         guiseteventcallback(buttons[i], GUI_EVENT_MOUSEOVER, guibuttonmouseover);
     }
-    guisetbacktexture(icons[BUTTON_NOT], 256, 64, 128, 128);
-    guisetbacktexture(icons[BUTTON_OR], 384, 64, 128, 128);
-    guisetbacktexture(icons[BUTTON_AND], 512, 64, 128, 128);
-    guisetbacktexture(icons[BUTTON_XOR], 640, 64, 128, 128);
-    guisetbacktexture(icons[BUTTON_RED], 256, 192, 128, 128);
-    guisetbacktexture(icons[BUTTON_GREEN], 384, 192, 128, 128);
-    guisetbacktexture(icons[BUTTON_BLUE], 512, 192, 128, 128);
+    guisetbacktexture(icons[BUTTON_NOT],    2 * 128, 0 * 128 + 64, 128, 128);
+    guisetbacktexture(icons[BUTTON_OR],     3 * 128, 0 * 128 + 64, 128, 128);
+    guisetbacktexture(icons[BUTTON_AND],    4 * 128, 0 * 128 + 64, 128, 128);
+    guisetbacktexture(icons[BUTTON_XOR],    5 * 128, 0 * 128 + 64, 128, 128);
+    guisetbacktexture(icons[BUTTON_RED],    2 * 128, 1 * 128 + 64, 128, 128);
+    guisetbacktexture(icons[BUTTON_GREEN],  3 * 128, 1 * 128 + 64, 128, 128);
+    guisetbacktexture(icons[BUTTON_BLUE],   4 * 128, 1 * 128 + 64, 128, 128);
+    guisetbacktexture(icons[BUTTON_INPUT],  6 * 128, 0 * 128 + 64, 128, 128);
+    guisetbacktexture(icons[BUTTON_OUTPUT], 7 * 128, 0 * 128 + 64, 128, 128);
+    guisetbacktexture(icons[BUTTON_CLOCK],  6 * 128, 1 * 128 + 64, 128, 128);
+    guisetbacktexture(icons[BUTTON_MEMORY], 7 * 128, 1 * 128 + 64, 128, 128);
 
     guiseteventcallback(buttons[BUTTON_NOT], GUI_EVENT_MOUSEDOWN, guibuttonnotdown);
     guiseteventcallback(buttons[BUTTON_OR], GUI_EVENT_MOUSEDOWN, guibuttonordown);
@@ -2159,6 +2297,10 @@ guitoolbarcreate(void)
     guiseteventcallback(buttons[BUTTON_RED], GUI_EVENT_MOUSEDOWN, guibuttonreddown);
     guiseteventcallback(buttons[BUTTON_GREEN], GUI_EVENT_MOUSEDOWN, guibuttongreendown);
     guiseteventcallback(buttons[BUTTON_BLUE], GUI_EVENT_MOUSEDOWN, guibuttonbluedown);
+    guiseteventcallback(buttons[BUTTON_INPUT], GUI_EVENT_MOUSEDOWN, guibuttonindown);
+    guiseteventcallback(buttons[BUTTON_OUTPUT], GUI_EVENT_MOUSEDOWN, guibuttonoutdown);
+    guiseteventcallback(buttons[BUTTON_CLOCK], GUI_EVENT_MOUSEDOWN, guibuttonclockdown);
+    guiseteventcallback(buttons[BUTTON_MEMORY], GUI_EVENT_MOUSEDOWN, guibuttonmemorydown);
 
     guiseteventcallback(buttons[BUTTON_NOT], GUI_EVENT_MOUSEUP, guibuttonmouseup);
     guiseteventcallback(buttons[BUTTON_OR], GUI_EVENT_MOUSEUP, guibuttonmouseup);
@@ -2167,6 +2309,10 @@ guitoolbarcreate(void)
     guiseteventcallback(buttons[BUTTON_RED], GUI_EVENT_MOUSEUP, guibuttonredup);
     guiseteventcallback(buttons[BUTTON_GREEN], GUI_EVENT_MOUSEUP, guibuttongreenup);
     guiseteventcallback(buttons[BUTTON_BLUE], GUI_EVENT_MOUSEUP, guibuttonblueup);
+    guiseteventcallback(buttons[BUTTON_INPUT], GUI_EVENT_MOUSEUP, guibuttonmouseup);
+    guiseteventcallback(buttons[BUTTON_OUTPUT], GUI_EVENT_MOUSEUP, guibuttonmouseup);
+    guiseteventcallback(buttons[BUTTON_CLOCK], GUI_EVENT_MOUSEUP, guibuttonmouseup);
+    guiseteventcallback(buttons[BUTTON_MEMORY], GUI_EVENT_MOUSEUP, guibuttonmouseup);
 
     guiseteventcallback(buttons[BUTTON_NOT], GUI_EVENT_MOUSELEAVE, guibuttonmouseleave);
     guiseteventcallback(buttons[BUTTON_OR], GUI_EVENT_MOUSELEAVE, guibuttonmouseleave);
@@ -2175,4 +2321,8 @@ guitoolbarcreate(void)
     guiseteventcallback(buttons[BUTTON_RED], GUI_EVENT_MOUSELEAVE, guibuttonredmouseleave);
     guiseteventcallback(buttons[BUTTON_GREEN], GUI_EVENT_MOUSELEAVE, guibuttongreenmouseleave);
     guiseteventcallback(buttons[BUTTON_BLUE], GUI_EVENT_MOUSELEAVE, guibuttonbluemouseleave);
+    guiseteventcallback(buttons[BUTTON_INPUT], GUI_EVENT_MOUSELEAVE, guibuttonmouseleave);
+    guiseteventcallback(buttons[BUTTON_OUTPUT], GUI_EVENT_MOUSELEAVE, guibuttonmouseleave);
+    guiseteventcallback(buttons[BUTTON_CLOCK], GUI_EVENT_MOUSELEAVE, guibuttonmouseleave);
+    guiseteventcallback(buttons[BUTTON_MEMORY], GUI_EVENT_MOUSELEAVE, guibuttonmouseleave);
 }

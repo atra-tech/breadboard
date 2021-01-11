@@ -23,14 +23,17 @@
 #define GATE_AND_H  2
 #define GATE_XOR_W  2
 #define GATE_XOR_H  2
-#define PACK_MEM_W  2
-#define PACK_MEM_H  19
-#define PACK_IN_W   2
+#define PACK_IN_W   1
 #define PACK_IN_H   1
-#define PACK_OUT_W  2
+#define PACK_OUT_W  1
 #define PACK_OUT_H  1
 #define PACK_CLK_W  2
 #define PACK_CLK_H  1
+#define PACK_MEM_W  3
+#define PACK_MEM_H  19
+#define WIRE_CONVERGE_LIMIT 100
+#define WIRE_CONVERGE_EXTRA 110
+#define DEFAULT_CLOCK_RATE  8
 
 /*enum wire_flags {
     WIRE_ACTIVE  = BIT(0),
@@ -50,10 +53,12 @@ enum pack_type {
 };
 
 struct World;
+struct Segment;
 
 typedef struct Wire {
     uint active;
     uint changed;
+    uint conv;
     uint layer;
     List *ins;
     List *outs; 
@@ -69,6 +74,7 @@ typedef struct Memory {
 typedef struct Circuit {
     List *wires;
     List *packs;
+    uint error;
 } Circuit;
 
 typedef struct Package {
@@ -77,10 +83,12 @@ typedef struct Package {
     uint clockrate; /* Clock tick denominator (1 / Hz) */
     float time;
     uint changed;
+    uint error;
     uint state;     /* Used for input/output packs */
     void (*func)(struct Package *);
     Memory *memory;
     Circuit *circuit;
+    struct Segment *seg;
     char *path;
     char *name;
     DList in_pins;  /* Pin */
@@ -100,7 +108,7 @@ Wire * wirecreate(void);
 void wiredelete(Wire *);
 Wire * wirebuild(struct World *world, uint x, uint y, uint layer);
 //void wireputsig(Wire *wire, uint value, uint highlight);
-void wireupdate(Wire *wire);
+uint wireupdate(Wire *wire);
 
 Circuit * circuitbuild(struct World *world);
 void circuitdelete(Circuit *circuit);
@@ -109,27 +117,30 @@ void circuitclear(Circuit *circuit);
 void circuitupdate(Circuit *circuit, float dt);
 void circuitupdatefull(Circuit *circuit, float dt);
 void circuitrebuild(struct World *world, Circuit **circuit);
+void circuitclearerrors(Circuit *circuit);
+void circuitresetwireconvs(Circuit *circuit);
 
 Package * packcreate(uint type, const char *path);
 void packdelete(Package *pack);
 void packload(Package *pack, const char *path);
 Package * packcopy(Package *pack);
-void packupdate(Package *pack, float dt);
+uint packupdate(Package *pack, float dt);
 
 void pininit(Package *pack, Pin *pin, int x, int y, const char *name);
 void pindelete(Pin *pin);
 void pingetsig(Pin *pin);
 //void pinputsig(Pin *pin);
 
-void updateclocktimes(float dt);
+void updateclocktimes(Circuit *circuit, float dt);
+void schedulesegremeshing(Circuit *circuit);
 
 void packfunc_not(Package *pack);
 void packfunc_or(Package *pack);
 void packfunc_and(Package *pack);
 void packfunc_xor(Package *pack);
-void packfunc_memory(Package *pack);
 void packfunc_input(Package *pack);
 void packfunc_output(Package *pack);
 void packfunc_clock(Package *pack);
+void packfunc_memory(Package *pack);
 
 #endif /* LOGIC_H */

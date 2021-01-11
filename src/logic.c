@@ -33,6 +33,7 @@ wirecreate(void)
     wire = malloc(sizeof(Wire));
     wire->active = 0;
     wire->changed = 0;
+    wire->conv = 0;
     wire->layer = 0;
     wire->ins = listcreate();
     wire->outs = listcreate();
@@ -152,65 +153,35 @@ wirebuild(World *world, uint x, uint y, uint layer)
     return wire;
 }
 
-/* Set wire activation state and set flags */
-void
-wireputsig(Wire *wire, uint value, uint highlight)
-{
-    uint i;
-    Pin *pin;
-    Segment *seg;
-    Tile *tile;
-
-    if (wire->active != value) {
-        wire->active = wire->active;
-        wire->changed = 1;
-
-        /* Update any output pins */
-        /*for (i = 0; i < wire->outs->size; i++) {
-            pin = listat(wire->outs, i);
-            pin->state = pin->state || wire->active;
-        }*/
-
-        /* Update world-space tiles for visual highlighting */
-        if (highlight) {
-            if (wire->active) {
-                for (i = 0; i < wire->tiles->size; i++) {
-                    tile = wire->tiles->vals[i];
-                    
-                    if (!tile) continue;
-
-                    BIT_SET(tile->state, TILE_POWERED);
-                }
-            } else {
-                for (i = 0; i < wire->tiles->size; i++) {
-                    tile = wire->tiles->vals[i];
-
-                    if (!tile) continue;
-
-                    BIT_CLR(tile->state, TILE_POWERED);
-                }
-            }
-        }
-        
-        /* Queue segment remeshes */
-        for (i = 0; i < wire->segs->size; i++) {
-            seg = listat(wire->segs, i);
-            seg->dirty = 1;
-        }
-    }
-}
-
 /* Pulls wire state based on input pins */
-void
+uint
 wireupdate(Wire *wire)
 {
-    uint i, prevstate;
+    uint i, prevstate, result;
     Pin *pin;
     Segment *seg;
     Tile *tile;
 
     prevstate = wire->active;
     wire->active = 0;
+    wire->changed = 0;
+    result = 0;
+
+    /* Skip updating after other oscillation culprits have had 
+     * extra cycles to be marked. */
+    if (wire->conv > WIRE_CONVERGE_EXTRA) {
+        return 1;
+    }
+
+    /* Flag connected packs as oscillating */
+    if (wire->conv > WIRE_CONVERGE_LIMIT) {
+        for (i = 0; i < wire->ins->size; i++) {
+            pin = listat(wire->ins, i);
+            pin->parent->error = 1;
+        }
+        result = 1;
+    }
+
 
     /* Activate wire if any pins are enabled */
     for (i = 0; i < wire->ins->size; i++) {
@@ -228,6 +199,7 @@ wireupdate(Wire *wire)
             pin = listat(wire->outs, i);
             pin->parent->changed = 1;
         }
+        wire->conv++;
     }
 
     /* Update world-space tiles for visual highlighting */
@@ -249,15 +221,15 @@ wireupdate(Wire *wire)
                 BIT_CLR(tile->state, TILE_POWERED);
             }
         }
-    }    
-
+    }
+    
     /* Queue segment remeshes */
     for (i = 0; i < wire->segs->size; i++) {
         seg = listat(wire->segs, i);
         seg->dirty = 1;
     }
 
-    wire->changed = 0;
+    return result;
 }
 
 Package *
@@ -267,7 +239,7 @@ packcreate(uint type, const char *path)
     Package *pack;
 
     pack = calloc(1, sizeof(Package));
-    pack->clockrate = 1;
+    pack->clockrate = DEFAULT_CLOCK_RATE;
     pack->changed = 1;
     pack->type = type;
     dlistinit(&pack->in_pins, sizeof(Pin));
@@ -366,6 +338,7 @@ packcopy(Package *src)
     dest->h = src->h;
     dest->clockrate = src->clockrate;
     dest->state = src->state;
+    dest->seg = src->seg;
 
     if (src->memory) {
         size = src->memory->size * sizeof(uint);
@@ -379,12 +352,18 @@ packcopy(Package *src)
 }
 
 /* Calculate state of package output pins based on input pin states */
-void
+uint
 packupdate(Package *pack, float dt)
 {
     uint i, j;
     Pin *pin;
     Wire *wire;
+
+    pack->changed = 0;
+
+    if (pack->error) {
+        return 1;
+    }
 
     switch(pack->type) {
     case PACK_CIRCUIT:
@@ -397,24 +376,6 @@ packupdate(Package *pack, float dt)
         for (i = 0; i < pack->out_pins.size; i++) {
             pin = dlistat(&pack->out_pins, i);
             pingetsig(pin);
-        }
-        break;
-    case PACK_INPUT:
-        /* Pack state is set by world input handler */
-        pin = dlistat(&pack->out_pins, 0);
-        pin->state = pack->state; 
-        break;
-    case PACK_OUTPUT:
-        pin = dlistat(&pack->in_pins, 0);
-        pack->state = pin->state;
-        break;
-    case PACK_CLOCK:
-        /* Switch state based on system time */
-        pin = dlistat(&pack->out_pins, 0);
-        pack->time += dt;
-        if (pack->time >= pack->clockrate) {
-            pack->time -= pack->clockrate;
-            pack->state = !pack->state;
         }
         break;
     default:
@@ -431,7 +392,7 @@ packupdate(Package *pack, float dt)
         }
     }
 
-    pack->changed = 0;
+    return 0;
 }
 
 /* Build a logical circuit from a world-space circuit */
@@ -449,6 +410,7 @@ circuitbuild(struct World *world)
     circuit = malloc(sizeof(Circuit));
     circuit->wires = listcreate();
     circuit->packs = listcreate();
+    circuit->error = 0;
 
     /* Build wires from connections to output pins */
     for (s = 0; s < SEGMENT_COUNT; s++) {
@@ -459,6 +421,10 @@ circuitbuild(struct World *world)
         } else {
             for (p = 0; p < seg->packs->size; p++) {
                 pack = listat(seg->packs, p);
+
+                if (pack->error) {
+                    seg->dirty = 1;
+                }
 
                 for (n = 0; n < pack->out_pins.size; n++) {
                     pin = dlistat(&pack->out_pins, n);
@@ -598,7 +564,7 @@ circuitupdate(Circuit *circuit, float dt)
             wire = listat(circuit->wires, i);
 
             if (wire->changed) {
-                wireupdate(wire);
+                circuit->error = wireupdate(wire);
                 found = 1;
             }
         }
@@ -607,7 +573,7 @@ circuitupdate(Circuit *circuit, float dt)
             pack = listat(circuit->packs, i);
 
             if (pack->changed) {
-                packupdate(pack, dt);
+                circuit->error = packupdate(pack, dt);
                 found = 1;
             }
         }
@@ -625,11 +591,10 @@ circuitupdatefull(Circuit *circuit, float dt)
     Layer *layer;
     Package *pack;
     Wire *wire;
-    Pin *pin;
 
     world = worldtop();
 
-    /* Clear all world-space wire activation states */
+    /* Clear all world-space wire activation and error states */
     for (i = 0; i < SEGMENT_COUNT; i++) {
         seg = world->segs[i];
 
@@ -645,27 +610,61 @@ circuitupdatefull(Circuit *circuit, float dt)
     for (i = 0; i < circuit->wires->size; i++) {
         wire = listat(circuit->wires, i);
         wireupdate(wire);
+        //wire->changed = 1;
     }
 
-    /* Mark all packs for updating */
     for (i = 0; i < circuit->packs->size; i++) {
         pack = listat(circuit->packs, i);
         pack->changed = 1;
     }
 
-    for (i = 0; i < circuit->wires->size; i++) {
-        wire = listat(circuit->wires, i);
-        wire->changed = 1;
-    }
     circuitupdate(circuit, dt);
 }
 
 void
 circuitrebuild(struct World *world, Circuit **circuit)
 {
+    schedulesegremeshing(*circuit);
     circuitclear(*circuit);
     *circuit = circuitbuild(world);
+    circuitclearerrors(*circuit);
     circuitupdatefull(*circuit, 0.0f);
+}
+
+void
+circuitclearerrors(Circuit *circuit)
+{
+    uint i;
+    Package *pack;
+    Wire *wire;
+
+    circuit->error = 0;
+
+    for (i = 0; i < circuit->packs->size; i++) {
+        pack = listat(circuit->packs, i);
+        pack->error = 0;
+
+        if (pack->type == PACK_CIRCUIT) {
+            circuitclearerrors(pack->circuit);
+        }
+    }
+
+    for (i = 0; i < circuit->wires->size; i++) {
+        wire = listat(circuit->wires, i);
+        wire->conv = 0;
+    }
+}
+
+void
+circuitresetwireconvs(Circuit *circuit)
+{
+    uint i;
+    Wire *wire;
+
+    for (i = 0; i < circuit->wires->size; i++) {
+        wire = listat(circuit->wires, i);
+        wire->conv = 0;
+    }
 }
 
 void
@@ -702,17 +701,48 @@ pingetsig(Pin *pin)
 
     for (i = 0; i < pin->ins->size; i++) {
         wire = listat(pin->ins, i);
-        pin->state += wire->active;
+        pin->state = pin->state || wire->active;
     }
 }
 
 /* Increments times of all clock packages by dt */
 void
-updateclocktimes(float dt)
+updateclocktimes(Circuit *circuit, float dt)
 {
-    /* TODO: Either universally keep track of packs in some global list;
-     * or iterate over the current world circuit, and all of it's
-     * subcircuits looking for clock packs */
+    uint i;
+    Package *pack;
+
+    for (i = 0; i < circuit->packs->size; i++) {
+        pack = listat(circuit->packs, i);
+
+        switch (pack->type) {
+        case PACK_CIRCUIT:
+            updateclocktimes(pack->circuit, dt);
+            pack->changed = 1;
+            break;
+        case PACK_CLOCK:
+            pack->time += dt;
+            pack->changed = 1;
+        }
+    }
+}
+
+/* Determine segments to remesh before circuit is cleared */
+void
+schedulesegremeshing(Circuit *circuit)
+{
+    uint i, j;
+    Wire *wire;
+    Segment *seg;
+
+    for (i = 0; i < circuit->wires->size; i++) {
+        wire = listat(circuit->wires, i);
+
+        for (j = 0; j < wire->segs->size; j++) {
+            seg = listat(wire->segs, j);
+            seg->dirty = 1;
+        }
+    }
 }
 
 void
@@ -776,27 +806,96 @@ packfunc_xor(Package *pack)
 }
 
 void
-packfunc_memory(Package *pack)
-{
-
-}
-
-void
 packfunc_input(Package *pack)
 {
+    Pin *out;
 
+    out = dlistat(&pack->out_pins, 0);
+    out->state = pack->state;
 }
 
 void
 packfunc_output(Package *pack)
 {
+    Pin *in;
 
+    in = dlistat(&pack->in_pins, 0);
+
+    pingetsig(in);
+
+    if (pack->state != in->state) {
+        pack->state = in->state;
+        pack->seg->dirty = 1;
+    }
 }
 
 void
 packfunc_clock(Package *pack)
 {
+    Pin *out;
 
+    out = dlistat(&pack->out_pins, 0);
+    
+    if (pack->time >= (1.0f / pack->clockrate)) {
+        pack->time -= (1.0f / pack->clockrate);
+        out->state = !out->state;
+    }
+}
+
+void
+packfunc_memory(Package *pack)
+{
+    int i;
+    uint dat, addr, out;
+    Pin *d[8], *a[8], *o[8];
+    Pin *ld, *st, *clk;
+
+    dat = 0;
+    addr = 0;
+
+    ld = dlistat(&pack->in_pins, 16);
+    st = dlistat(&pack->in_pins, 17);
+    clk = dlistat(&pack->in_pins, 18);
+    pingetsig(ld);
+    pingetsig(st);
+    pingetsig(clk);
+
+    /* Pull memory address from pins */
+    for (i = 7; i >= 0; i--) {
+        a[i] = dlistat(&pack->in_pins, i + 8);
+        pingetsig(a[i]);
+        addr |= a[i]->state << i;
+        //addr = addr << 1;
+    }
+
+    /* Pull data from pins and store in memory */
+    if (st->state && !pack->state && clk->state) {
+
+        for (i = 7; i >= 0; i--) {
+            d[i] = dlistat(&pack->in_pins, i);
+            pingetsig(d[i]);
+            dat |= d[i]->state << i;
+            //dat = dat << 1;
+        }
+        pack->memory->data[addr] = dat;
+    }
+    
+    /* Enxure that data is only stored on rising clock signal */
+    if (clk->state) {
+        pack->state = 1;
+    } else {
+        pack->state = 0;
+    }
+
+    /* Output state to pins. Defaults to 0 if `load` pin is not active */
+    if (ld->state) {
+        out = pack->memory->data[addr];
+
+        for (i = 0; i < 8; i++) {
+            o[i] = dlistat(&pack->out_pins, i);
+            o[i]->state = (out >> i) & 1;
+        }
+    }
 }
 
 void
@@ -890,6 +989,51 @@ packinit_xor(Package *pack)
 }
 
 void
+packinit_input(Package *pack)
+{
+    Pin pin;
+
+    pack->w = PACK_IN_W;
+    pack->h = PACK_IN_H;
+    pack->func = packfunc_input;
+    pack->name = malloc(3 * sizeof(char));
+    memcpy(pack->name, "IN", 3 * sizeof(char));
+    
+    pininit(pack, &pin, PACK_IN_W, 0, "");
+    dlistpush(&pack->out_pins, &pin);
+}
+
+void
+packinit_output(Package *pack)
+{
+    Pin pin;
+
+    pack->w = PACK_OUT_W;
+    pack->h = PACK_OUT_H;
+    pack->func = packfunc_output;
+    pack->name = malloc(4 * sizeof(char));
+    memcpy(pack->name, "OUT", 4 * sizeof(char));
+    
+    pininit(pack, &pin, -1, 0, "");
+    dlistpush(&pack->in_pins, &pin);
+}
+
+void
+packinit_clock(Package *pack)
+{
+    Pin pin;
+
+    pack->w = PACK_CLK_W;
+    pack->h = PACK_CLK_H;
+    pack->func = packfunc_clock;
+    pack->name = malloc(6 * sizeof(char));
+    memcpy(pack->name, "CLOCK", 6 * sizeof(char));
+
+    pininit(pack, &pin, PACK_CLK_W, 0, "");
+    dlistpush(&pack->out_pins, &pin);
+}
+
+void
 packinit_memory(Package *pack)
 {
     Pin pin;
@@ -899,6 +1043,10 @@ packinit_memory(Package *pack)
     pack->func = packfunc_memory;
     pack->name = malloc(4 * sizeof(char));
     memcpy(pack->name, "RAM", 4 * sizeof(char));
+    
+    pack->memory = malloc(sizeof(Memory)); 
+    pack->memory->data = calloc(256, sizeof(uint));
+    pack->memory->size = 256;
     
     pininit(pack, &pin, -1, 18, "D0");
     dlistpush(&pack->in_pins, &pin);
@@ -979,51 +1127,6 @@ packinit_memory(Package *pack)
     dlistpush(&pack->out_pins, &pin);
     
     pininit(pack, &pin, PACK_MEM_W, 11, "O7");
-    dlistpush(&pack->out_pins, &pin);
-}
-
-void
-packinit_input(Package *pack)
-{
-    Pin pin;
-
-    pack->w = PACK_IN_W;
-    pack->h = PACK_IN_H;
-    pack->func = packfunc_input;
-    pack->name = malloc(3 * sizeof(char));
-    memcpy(pack->name, "IN", 3 * sizeof(char));
-    
-    pininit(pack, &pin, PACK_IN_W, 0, "");
-    dlistpush(&pack->out_pins, &pin);
-}
-
-void
-packinit_output(Package *pack)
-{
-    Pin pin;
-
-    pack->w = PACK_OUT_W;
-    pack->h = PACK_OUT_H;
-    pack->func = packfunc_output;
-    pack->name = malloc(4 * sizeof(char));
-    memcpy(pack->name, "OUT", 4 * sizeof(char));
-    
-    pininit(pack, &pin, PACK_OUT_W, 0, "");
-    dlistpush(&pack->in_pins, &pin);
-}
-
-void
-packinit_clock(Package *pack)
-{
-    Pin pin;
-
-    pack->w = PACK_CLK_W;
-    pack->h = PACK_CLK_H;
-    pack->func = packfunc_clock;
-    pack->name = malloc(6 * sizeof(char));
-    memcpy(pack->name, "CLOCK", 6 * sizeof(char));
-
-    pininit(pack, &pin, PACK_CLK_W, 0, "");
     dlistpush(&pack->out_pins, &pin);
 }
 

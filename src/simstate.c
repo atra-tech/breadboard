@@ -134,6 +134,7 @@ simrender(void)
     glClearColor(0.784f, 0.761f, 0.725f, 1.0f);
     //glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+    glEnable(GL_BLEND);
 
     //worldrender(world, camera);
     /*  TODO: Render gates/ICs
@@ -216,10 +217,10 @@ buttonmouseup(GUIElement *elem, ...)
 void
 createtestgui(void)
 {
-    GUILayer *layer;
+    GUILayer *toolbarlayer;
     GUIElement *elem[10];
 
-    layer = guilayercreate("res/shader/guivert.glsl",
+    toolbarlayer = guilayercreate("res/shader/guivert.glsl",
             "res/shader/guifrag.glsl",
             "res/texture/gui.png");
 
@@ -266,8 +267,8 @@ createtestgui(void)
             GUI_ATTR_CLICKABLE,
             "menuopt_2");
 
-    guilinklayer(elem[0], layer);
-    guienabletextlayer(layer, "res/shader/fontvert.glsl",
+    guilinklayer(elem[0], toolbarlayer);
+    guienabletextlayer(toolbarlayer, "res/shader/fontvert.glsl",
             "res/shader/fontfrag.glsl",
             "res/font/maledict.png",
             8, 8);
