@@ -66,7 +66,8 @@ enum GUIAttrib {
     GUI_ATTR_HASBORDER  = BIT(9),
     GUI_ATTR_CLICKABLE  = BIT(10),
     GUI_ATTR_RESIZETAB  = BIT(11),
-    GUI_ATTR_NOCAPTURE  = BIT(12)
+    GUI_ATTR_NOCAPTURE  = BIT(12),
+    GUI_ATTR_WH_RESIZE  = BIT(13)
 };
 
 enum GUIResizeTabType {
@@ -143,7 +144,7 @@ typedef struct {
 
 typedef struct GUIElem {
     float x, y;
-    float w, h;
+    float w, h, ratio_h;
     uint attr;
     uint state, prevstate;
     uint event;
@@ -200,6 +201,7 @@ void guisetgridtext(GUIElement *elem, const char *text);
 void guitextscrollenable(GUIElement *elem);
 void guitextgridadd(GUITextGrid *grid, GUIElement *parent);
 void guiscrollbaradd(GUIScrollBar *bar, GUIElement *parent);
+void guienableratioresizing(GUIElement *elem, float ratio_h);
 void guienabletextlayer(GUILayer *layer, const char *vshader,
         const char *fshader, const char *fontpath,
         int font_w, int font_h);

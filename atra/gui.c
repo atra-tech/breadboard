@@ -178,6 +178,14 @@ guienabletextlayer(GUILayer *layer, const char *vshader, const char *fshader,
     layer->textenabled = 1;
 }
 
+/* Sets GUI element to scale in relativity  */
+void
+guienableratioresizing(GUIElement *elem, float ratio_h)
+{
+    BIT_SET(elem->attr, GUI_ATTR_WH_RESIZE);
+    elem->ratio_h = ratio_h;
+}
+
 /* Set a GUI element as the base element for a layer */
 void
 guilinklayer(GUIElement *elem, GUILayer *layer)
@@ -315,6 +323,7 @@ guiupdate(float dt)
     
 
     /* TODO: Handle resizing */
+    //if ()
 
     prev_mx = mx;
     prev_my = my;
@@ -526,7 +535,7 @@ guimesh(GUIElement *elem)
     VBuffer *vbo = &layer->vbo;
     List *agenda;
     int x_min, y_min, x_max, y_max, depth;
-    float rel_x, rel_y, rel_w, rel_h, mod_x, mod_y;
+    float rel_x, rel_y, rel_w, rel_h, mod_x, mod_y, scr_ratio;
 
     mod_x = guicam.width;
     mod_y = guicam.height;
@@ -539,21 +548,12 @@ guimesh(GUIElement *elem)
     }
 
     depth = -950.0f;
+    scr_ratio = guicam.height / (float)guicam.width;
     agenda = listcreate();
     listpushback(agenda, elem);
 
     while (agenda->size > 0) {
         elem = listat(agenda, 0);
-       
-        // If parent of elem is different, check the parent of the parent
-
-        /*if (elem->parent != parent) {
-            parent = elem->parent;
-            rel_x += parent->x * mod_x;
-            rel_y += parent->y * mod_y;
-            mod_x *= parent->w;
-            mod_y *= parent->h;
-        }*/
         rel_elem = elem;
         next = elem->parent;
         rel_x = 0; rel_y = 0;
@@ -561,9 +561,19 @@ guimesh(GUIElement *elem)
 
         while (next) {
             rel_x = (rel_x + rel_elem->x) * next->w;
-            rel_y = (rel_y + rel_elem->y) * next->h;
             rel_w *= rel_elem->w;
-            rel_h *= rel_elem->h;
+
+            if (next->attr & GUI_ATTR_WH_RESIZE) {
+                rel_y = (rel_y + rel_elem->y) * next->w * next->ratio_h;
+            } else {
+                rel_y = (rel_y + rel_elem->y) * next->h;
+            }
+
+            if (rel_elem->attr & GUI_ATTR_WH_RESIZE) {
+                rel_h *= rel_elem->w * rel_elem->ratio_h;
+            } else {
+                rel_h *= rel_elem->h;
+            }
             rel_elem = next;
             next = rel_elem->parent;
         }
@@ -574,14 +584,17 @@ guimesh(GUIElement *elem)
             }
         }
         if (!(elem->state & GUI_STATE_INVISIBLE)) {
-            //x_min = rel_x + elem->x * mod_x;
-            //y_min = rel_y + elem->y * mod_y;
-            //x_max = x_min + elem->w * mod_x;
-            //y_max = y_min + elem->h * mod_y;
             x_min = (rel_x + rel_elem->x) * guicam.width;
-            y_min = (rel_y + rel_elem->y) * guicam.height;
             x_max = x_min + rel_w * (rel_elem->w * guicam.width);
-            y_max = y_min + rel_h * (rel_elem->h * guicam.height);
+            
+            if (rel_elem->attr & GUI_ATTR_WH_RESIZE) {
+                y_min = (rel_y + rel_elem->y) * guicam.width;
+                y_max = y_min + rel_h * rel_elem->w *
+                    rel_elem->ratio_h * guicam.width;
+            } else {
+                y_min = (rel_y + rel_elem->y) * guicam.height;
+                y_max = y_min + rel_h * rel_elem->h * guicam.height;
+            }
 
             if (elem->attr & GUI_ATTR_HASTEXTURE) {
                 guipushquad(vbo, x_min, y_min, x_max, y_max,
@@ -596,24 +609,10 @@ guimesh(GUIElement *elem)
                     elem->layer->dirty &&
                     elem->textgrid) {
                 grid = elem->textgrid;
-                //linewidth = (x_max - x_min) /
-                //    (grid->fontwidth + grid->fontspacing);
-                //maxlines = (y_max - y_min) /
-                //    (grid->fontheight + grid->linespacing);
-
-                //if (linewidth != grid->colcount ||
-                //    maxlines != grid->rowcount) {
-                //    grid->resized = 1;
-                //}
-                //if (grid->resized) {
-                    guicalcfontgridvertices(grid, x_min, y_min,
-                            x_max, y_max, depth);
-                //    grid->resized = 0;
-                //}
-                //if (grid->textset) {
-                    guitextwritetext(elem);
-                //}
-                //guitextreadtext(elem);
+                
+                guicalcfontgridvertices(grid, x_min, y_min,
+                        x_max, y_max, depth);
+                guitextwritetext(elem);
 
                 if (!grid->textset) {
                     //guitextwritetext(elem);
@@ -848,16 +847,48 @@ guicursormouseset(GUIElement *elem, int mx, int my)
 
     while (next) {
         rel_x = (rel_x + elem->x) * next->w;
-        rel_y = (rel_y + elem->y) * next->h;
         rel_w *= elem->w;
-        rel_h *= elem->h;
+
+        /*if (next->attr & GUI_ATTR_WH_RESIZE) {
+                rel_y = (rel_y + rel_elem->y) * next->w * next->ratio_h;
+            } else {
+                rel_y = (rel_y + rel_elem->y) * next->h;
+            }
+
+            if (rel_elem->attr & GUI_ATTR_WH_RESIZE) {
+                rel_h *= rel_elem->w * rel_elem->ratio_h;
+            } else {
+                rel_h *= rel_elem->h;
+            }*/
+
+        if (next->attr & GUI_ATTR_WH_RESIZE) {
+            rel_y = (rel_y + elem->y) * next->w * next->ratio_h;
+        } else {
+            rel_y = (rel_y + elem->y) * next->h;
+        }
+
+        if (elem->attr & GUI_ATTR_WH_RESIZE) {
+            rel_h *= elem->w * elem->ratio_h;
+        } else {
+            rel_h *= elem->h;
+        }
+
         elem = next;
         next = elem->parent;
     }
     rel_x = (rel_x + elem->x) * guicam.width + (*transvec)[0];
-    rel_y = (rel_y + elem->y) * guicam.height + (*transvec)[1];
     rel_w *= elem->w * guicam.width;
-    rel_h *= elem->h * guicam.height;
+
+    if (elem->attr & GUI_ATTR_WH_RESIZE) {
+        /*  y_min = (rel_y + rel_elem->y) * guicam.width;
+            y_max = y_min + rel_h * rel_elem->w * rel_elem->ratio_h * guicam.width;
+        */
+        rel_y = (rel_y + elem->y) * guicam.width + (*transvec)[1];
+        rel_h *= elem->w * elem->ratio_h * guicam.width;
+    } else {
+        rel_y = (rel_y + elem->y) * guicam.height + (*transvec)[1];
+        rel_h *= elem->h * guicam.height;
+    }
 
     rel_mx = mx - rel_x;
     rel_my = my - rel_y;
@@ -1236,16 +1267,32 @@ guimouseintersects(GUIElement *elem, int mx, int my)
 
     while (next) {
         rel_x = (rel_x + elem->x) * next->w;
-        rel_y = (rel_y + elem->y) * next->h;
         rel_w *= elem->w;
-        rel_h *= elem->h;
+        
+        if (next->attr & GUI_ATTR_WH_RESIZE) {
+            rel_y = (rel_y + elem->y) * next->w * next->ratio_h;
+        } else {
+            rel_y = (rel_y + elem->y) * next->h;
+        }
+
+        if (elem->attr & GUI_ATTR_WH_RESIZE) {
+            rel_h *= elem->w * elem->ratio_h;
+        } else {
+            rel_h *= elem->h;
+        }
         elem = next;
         next = elem->parent;
     }
     rel_x = (rel_x + elem->x) * guicam.width + (*transvec)[0];
-    rel_y = (rel_y + elem->y) * guicam.height + (*transvec)[1];
     rel_w *= elem->w * guicam.width;
-    rel_h *= elem->h * guicam.height;
+    
+    if (elem->attr & GUI_ATTR_WH_RESIZE) {
+        rel_y = (rel_y + elem->y) * guicam.width + (*transvec)[1];
+        rel_h *= elem->w * elem->ratio_h * guicam.width;
+    } else {
+        rel_y = (rel_y + elem->y) * guicam.height + (*transvec)[1];
+        rel_h *= elem->h * guicam.height;
+    }
 
     if (mx < rel_x)
         return 0;
