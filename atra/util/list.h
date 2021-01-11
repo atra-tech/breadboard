@@ -62,7 +62,7 @@ void dlistinit(DList *list, size_t elemsize);
 void *dlistat(DList *list, uint index);
 void dlistpush(DList *list, void *elem);
 void dlistinsert(DList *list, void *elem, uint index);
-void dliatpop(DList *list);
+void dlistpop(DList *list);
 void *dlistback(DList *list);
 void dlistclear(DList *list);
 void dlistclearnoresize(DList *list);

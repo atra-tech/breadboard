@@ -283,13 +283,17 @@ dlistinit(DList *list, size_t elemsize)
 void *
 dlistat(DList *list, uint index)
 {
-    return ((char *)list->data) + index * list->elemsize;
+    if (list->size > 0) {
+        return ((char *)list->data) + index * list->elemsize;
+    }
+
+    return NULL;
 }
 
 void
 dlistgrow(DList *list)
 {
-    void *newmem = realloc(list->data, list->cap * 2);
+    void *newmem = realloc(list->data, (list->cap * 2) * list->elemsize);
 
     if (newmem) {
         list->data = newmem;
@@ -303,7 +307,7 @@ dlistgrow(DList *list)
 void
 dlistshrink(DList *list)
 {
-    void **newmem = realloc(list->data, list->cap / 2);
+    void **newmem = realloc(list->data, (list->cap / 2) * list->elemsize);
 
     if (newmem) {
         list->data = newmem;
@@ -344,7 +348,7 @@ dlistinsert(DList *list, void *elem, uint index)
 }
 
 void
-dliatpop(DList *list)
+dlistpop(DList *list)
 {
     if (list->size <= 0) {
         list->size = 0;
