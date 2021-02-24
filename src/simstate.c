@@ -16,6 +16,7 @@
 #include "world.h"
 #include "player.h"
 #include "gui.h"
+#include "ui.h"
 
 #define INV_16            0.0625
 #define CAMERA_ZOOM_SPEED camera->zoom * INV_16
@@ -32,7 +33,6 @@ static void handlescrollwheel(Event *e);
 
 static Camera *camera;
 static State *simstate;
-static World *world;
 static Player player;
 
 
@@ -41,13 +41,11 @@ simstateinit(void)
 {
     simstate = statecreate(simhandle, simupdate, simrender);
     camera = getmaincamera();
-   
-    world = malloc(sizeof(World));
-    worldinit(world);
+
+    worldpush(worldcreate());
     playerinit(&player);
     camerabindtoentity(camera, &player.ent);
-
-    //TODO: Create world (or load from file)
+    ui_init();
 }
 
 void
@@ -65,6 +63,7 @@ simstatestop(void)
         die("Fatal engine state stack error: Bad order");
     }
     //TODO: Delete resources and clean up
+    worldshutdown();
     atrapopstate();
 }
 
@@ -103,7 +102,7 @@ simhandle(void)
         {
             if (!player.locked) {
                 playerhandle(&player, &e);
-                worldhandle(world, &e);
+                worldhandle(&e);
                 handlescrollwheel(&e);
             }
         }
@@ -123,9 +122,8 @@ simupdate(float dt)
 {
     playerupdate(&player, dt);
     cameraupdate(camera);
-    worldupdate(world, dt);
-
     guiupdate(dt);
+    worldupdate(dt);
 }
 
 void
@@ -139,7 +137,7 @@ simrender(void)
     //worldrender(world, camera);
     /*  TODO: Render gates/ICs
      *  Render wire layers */
-    worldrender(world, camera);
+    worldrender(camera);
     guirender();
     worldrendermouseseg(camera);
 }
