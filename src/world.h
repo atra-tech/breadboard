@@ -31,6 +31,7 @@
 #define FONT_GAP            0
 #define PACK_FONT_SIZE      16
 #define PIN_FONT_SIZE       12
+#define IO_FONT_SIZE        20
 #define SELBOX_THICKNESS    2
 
 enum layer_type {
@@ -132,6 +133,7 @@ typedef struct Segment {
 typedef struct World {
     Segment *segs[SEGMENT_COUNT];
     Circuit *circuit;
+    char *name; /* May be NULL for untitled worlds */
 } World;
 
 typedef struct SelectBox {
@@ -141,18 +143,40 @@ typedef struct SelectBox {
     mat4 modelmat;
 } SelectBox;
 
-void worldinit(World *world);
+void worldstart(void);
+void worldshutdown(void);
+World * worldcreate(void);
+World * worldcreatefake(void);
 void worldpush(World *world);
 World * worldtop(void);
 void worldpop(void);
-void worldhandle(World *world, Event *e);
-void worldupdate(World *world, float dt);
-void worldrender(World *world, Camera *cam);
+void worldswitch(World *world);
+void worldhandle(Event *e);
+void worldupdate(float dt);
+void worldrender(Camera *cam);
 void worldrendermouseseg(Camera *cam);
 void worlddelete(World *world);
+void worlddeletepacks(World *world);
+void worlddeletefake(World *world);
+void worldbuild(World *world, Circuit *circuit);
+void worldbuildfromselbox(World *dest, World *src, uint clearsrc);
 
 void worldsave(const char *path);
 void worldload(const char *path);
+
+void worldsetpath(World *world, const char *path);
+
+void freeseginit(FreeSegment *seg, float x, float y, uint w, uint h);
+void freesegdelete(FreeSegment *seg);
+void freesegmesh(FreeSegment *seg);
+FreeSegment * freesegcopy(FreeSegment *seg);
+FreeSegment * freesegbuild(uint x, uint y, uint w, uint h, uint clearsrc);
+int freesegmerge(FreeSegment *seg, int x, int y);
+
+SelectBox * selboxget(void);
+void setmouseseg(FreeSegment *seg);
+
+
 
 //void worldaddpack(uint x, uint y, uint type, void *func);
 
