@@ -2541,6 +2541,7 @@ void
 guibuttonfilenewdown(GUIElement *elem, ...)
 {
     /* Open file name prompt */
+    ui_requestnewfile();
     ui_confirmbox_fileload_preloadsave();
 }
 

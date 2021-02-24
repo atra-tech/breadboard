@@ -113,17 +113,19 @@ static Camera *uicam;
 static FileList files;
 static SelectBox *selbox;
 static int confirmbox_result;
-static char *target_path;
 static int packload_isopen;
+static int newfile_request;
+static char *target_path;
 static Package *target_pack;
 
 void
 ui_init(void)
 {
     uicam = guigetcamera();
-    confirmbox_result = 0;
     selbox = selboxget();
+    confirmbox_result = 0;
     packload_isopen = 0;
+    newfile_request = 0;
 
     ui_packsave_init();
     ui_packload_init();
@@ -1489,23 +1491,6 @@ ui_updatefunc_heightfittext(GUIElement *elem, float dt, ...)
 }
 
 void
-ui_save_noconfirm(GUIElement *elem, ...)
-{
-    GUIElement *textfield;
-    char *name, *path;
-    uint len;
-
-    textfield = guigetelem("ui_filesave_text");
-    name = textfield->textgrid->text;
-
-    len = strlen(FILE_CIRCUIT_DIR) + strlen(name);
-    path = malloc((len + 2) * sizeof(char));
-    sprintf(path, "%s/%s", FILE_CIRCUIT_DIR, name);
-    filesaveworld(path, worldtop());
-    free(path);
-}
-
-void
 ui_textfield_gainfocus(GUIElement *elem, ...)
 {
     guisetbacktexture(elem, 3, 0, 1, 1);
@@ -1698,11 +1683,17 @@ ui_filesave_save_mousedown(GUIElement *elem, ...)
             return;
         }
     }
-    filesaveworld(target_path, worldtop());
+    filesaveworld(target_path, world);
 
     if (files.select_enabled) {
         ui_filelist_openfile(files.select_index);
         files.select_enabled = 0;
+    }
+
+    if (newfile_request) {
+        world = worldcreate();
+        worldswitch(world);
+        newfile_request = 0;
     }
 
     ui_filesave_hide();
@@ -1970,6 +1961,7 @@ ui_filelist_openfile(uint index)
     fname = listat(files.paths, index);
     ui_settargetpath(fname);
     world = worldcreate();
+    world->name = strdup(fname);
     filegetworld(target_path, world);
     circuitrebuild(world, &world->circuit);
     worldswitch(world);
@@ -2129,6 +2121,16 @@ void
 ui_confirmbox_filesave_overwrite_save(GUIElement *elem, ...)
 {
     filesaveworld(target_path, worldtop());
+
+    if (files.select_enabled) {
+        ui_filelist_openfile(files.select_index);
+        files.select_enabled = 0;
+    }
+
+    if (newfile_request) {
+        worldswitch(worldcreate());
+        newfile_request = 0;
+    }
     ui_filesave_hide();
     ui_confirmbox_hide();
     ui_filelist_populate();
@@ -2201,6 +2203,7 @@ ui_confirmbox_fileload_preloadsave_no(GUIElement *elem, ...)
     } else {
         world = worldcreate();
         worldswitch(world);
+        newfile_request = 0;
     }
     ui_fileload_hide();
     ui_confirmbox_hide();
@@ -2209,6 +2212,8 @@ ui_confirmbox_fileload_preloadsave_no(GUIElement *elem, ...)
 void
 ui_confirmbox_fileload_preloadsave_cancel(GUIElement *elem, ...)
 {
+    files.select_enabled = 0;
+    newfile_request = 0;
     ui_confirmbox_hide();
 }
 
@@ -2266,4 +2271,10 @@ void
 ui_settargetpack(Package *pack)
 {
     target_pack = pack;
+}
+
+void
+ui_requestnewfile(void)
+{
+    newfile_request = 1;
 }

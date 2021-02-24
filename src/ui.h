@@ -90,5 +90,6 @@ void ui_iorename_hide(void);
 void ui_settargetpack(struct Package *pack);
 
 FileList * ui_getfilelist(void);
+void ui_requestnewfile(void);
 
 #endif /* UI_H */
