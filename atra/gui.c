@@ -20,6 +20,9 @@
 #include "input.h"
 #include "entity.h"
 
+#define LERP(a, b, t) (1.0f - t) * a + b * t
+#define CLAMP(v, l, h) (v < l) ? l : ((v > h) ? h : v)
+
 static HTable *elemtable;
 static List *elemlist;
 static List *layerstack;
@@ -30,6 +33,7 @@ static GUIElement *focus;
 static int prev_mx, prev_my;
 static int prev_cam_w, prev_cam_h;
 static int mcaptured;
+static int interrupt;
 
 static int guimouseintersects(GUIElement *elem, int mx, int my);
 static void guisetattrtemplate(GUIElement *elem, int type, int attr);
@@ -186,6 +190,59 @@ guienableratioresizing(GUIElement *elem, float ratio_h)
     elem->ratio_h = ratio_h;
 }
 
+/* Make an element and all its children visible */
+void
+guishowelem(GUIElement *elem)
+{
+    uint i;
+
+    BIT_CLR(elem->state, GUI_STATE_INVISIBLE);
+
+    for (i = 0; i < elem->children->size; i++) {
+        guishowelem(listat(elem->children, i));
+    }
+   
+    /* Bring to top of layer stack if this is the base element of the layer */
+    if (!elem->parent) {
+        guisetfocus(elem);
+
+        for (i = 0; i < layerstack->size; i++) {
+            GUILayer *layer = listat(layerstack, i);
+
+            if (layer == elem->layer) {
+                listmoveelem(layerstack, i, layerstack->size - 1);
+                break;
+            }
+        }
+    }
+}
+
+void
+guisignalinterrupt(GUIElement *elem)
+{
+    interrupt = 1;
+    elem->layer->dirty = 1;
+}
+
+void
+guihandleinterrupt(void)
+{
+    interrupt = 0;
+}
+
+/* Make an element and all its children invisible */
+void
+guihideelem(GUIElement *elem)
+{
+    uint i;
+
+    BIT_SET(elem->state, GUI_STATE_INVISIBLE);
+
+    for (i = 0; i < elem->children->size; i++) {
+        guihideelem(listat(elem->children, i));
+    }
+}
+
 /* Set a GUI element as the base element for a layer */
 void
 guilinklayer(GUIElement *elem, GUILayer *layer)
@@ -201,6 +258,17 @@ guiaddelem(GUIElement *dest, GUIElement *elem)
     listpushback(dest->children, elem);
     elem->parent = dest;
     elem->layer = dest->layer;
+
+    if (dest->state & GUI_STATE_INVISIBLE) {
+        guihideelem(elem);
+    }
+}
+
+void
+guisetupdatefunc(GUIElement *elem,
+        void (*func)(GUIElement *elem, float dt, ...))
+{
+    elem->update = func;
 }
 
 void
@@ -211,9 +279,15 @@ guiseteventcallback(GUIElement *elem, int eventtype,
 }
 
 GUIElement *
-guigetelem(char *id)
+guigetelem(const char *id)
 {
     return htableget(elemtable, id);
+}
+
+Camera *
+guigetcamera(void)
+{
+    return &guicam;
 }
 
 int
@@ -235,11 +309,12 @@ guihandle(Event *e)
             layer = listat(layerstack, i);
             base = layer->baseelem;
             captured += guihandlemouse(base, e);
+            captured += ((base->attr & GUI_ATTR_BLOCKING) && 
+                    !(base->state & GUI_STATE_INVISIBLE));
 
-            if (captured > 0)
+            if (captured > 0) {
                 break;
-            //else
-                //kbdfocus = NULL;
+            }
         }
     } else if (e->type == SDL_KEYDOWN ||
                e->type == SDL_KEYUP ||
@@ -256,12 +331,29 @@ guihandle(Event *e)
     return captured;
 }
 
+/* TODO: Refactor to be iterative */
+void
+guiupdateelem(GUIElement *elem, float dt)
+{
+    uint i;
+    GUIElement *child;
+
+    if (elem->update) {
+        elem->update(elem, dt);
+    }
+    for (i = 0; i < elem->children->size; i++) {
+        child = listat(elem->children, i);
+        guiupdateelem(child, dt);
+    }
+
+}
+
 /* Iterate through all GUI elements and check for movement, resizing, 
  * remeshing.  Calls custom update callback if it exists. */
 void
 guiupdate(float dt)
 {
-    uint i;
+    uint i, j;
     int mx, my, diff_mx, diff_my;
     GUIElement *elem;
     GUILayer *layer;
@@ -273,11 +365,18 @@ guiupdate(float dt)
     diff_mx = mx - prev_mx;
     diff_my = my - prev_my;
 
-    /* Reposition grabbed movable element */
     for (i = 0; i < layerstack->size; i++) {
         layer = listat(layerstack, i);
         elem = layer->baseelem;
 
+        if (elem->state & GUI_STATE_INVISIBLE) {
+            continue;
+        }
+        
+        /* Call recursive element update */
+        guiupdateelem(elem, dt);
+
+        /* Reposition grabbed movable element */
         if (elem->attr & GUI_ATTR_MOVABLE) {
             if (elem->state & GUI_STATE_MOUSE_LB &&
                 elem->prevstate & GUI_STATE_MOUSE_LB) {
@@ -302,7 +401,6 @@ guiupdate(float dt)
                 } else if (min_y + off_y < 0) {
                     transvec[1] = -min_y - layer->modelmat[3][1];
                 }
-
                 glm_translate(layer->modelmat, transvec);
             }
         }
@@ -321,10 +419,6 @@ guiupdate(float dt)
         }
     }
     
-
-    /* TODO: Handle resizing */
-    //if ()
-
     prev_mx = mx;
     prev_my = my;
 }
@@ -559,21 +653,24 @@ guimesh(GUIElement *elem)
         rel_x = 0; rel_y = 0;
         rel_w = 1; rel_h = 1;
 
+        /* Calculate relative positioning based on parents */
         while (next) {
             rel_x = (rel_x + rel_elem->x) * next->w;
             rel_w *= rel_elem->w;
 
+
+            if (rel_elem->attr & GUI_ATTR_WH_RESIZE) {
+                rel_h *= rel_elem->w * rel_elem->ratio_h;
+            } else {
+                rel_h *= rel_elem->h;
+            } 
+ 
             if (next->attr & GUI_ATTR_WH_RESIZE) {
                 rel_y = (rel_y + rel_elem->y) * next->w * next->ratio_h;
             } else {
                 rel_y = (rel_y + rel_elem->y) * next->h;
             }
 
-            if (rel_elem->attr & GUI_ATTR_WH_RESIZE) {
-                rel_h *= rel_elem->w * rel_elem->ratio_h;
-            } else {
-                rel_h *= rel_elem->h;
-            }
             rel_elem = next;
             next = rel_elem->parent;
         }
@@ -588,9 +685,13 @@ guimesh(GUIElement *elem)
             x_max = x_min + rel_w * (rel_elem->w * guicam.width);
             
             if (rel_elem->attr & GUI_ATTR_WH_RESIZE) {
-                y_min = (rel_y + rel_elem->y) * guicam.width;
-                y_max = y_min + rel_h * rel_elem->w *
-                    rel_elem->ratio_h * guicam.width;
+                float height = rel_elem->w * rel_elem->ratio_h;
+                float offset = height * rel_elem->y;
+                float rel_min = rel_y + rel_elem->y * scr_ratio - offset;
+                float rel_max = rel_min + height * rel_h;
+
+                y_min = rel_min * guicam.width;
+                y_max = rel_max * guicam.width;
             } else {
                 y_min = (rel_y + rel_elem->y) * guicam.height;
                 y_max = y_min + rel_h * rel_elem->h * guicam.height;
@@ -936,6 +1037,7 @@ guihandlemouse(GUIElement *elem, Event *e)
 
     my = guicam.height - my;
     isect = guimouseintersects(elem, mx, my);
+    interrupt = 0;
 
     if (isect &&
         !(elem->state & GUI_STATE_INVISIBLE) &&
@@ -965,11 +1067,25 @@ guihandlemouse(GUIElement *elem, Event *e)
                 BIT_SET(elem->state, GUI_STATE_MOUSEOVER);
             }
         } else if (e->type == SDL_MOUSEBUTTONDOWN) {
+            /* Pull current layer up to top of stack */
+            for (i = 0; i < layerstack->size; i++) {
+                GUILayer *layer = listat(layerstack, i);
+
+                if (layer == elem->layer) {
+                    listmoveelem(layerstack, i, layerstack->size - 1);
+                    break;
+                }
+            }
+
             if (mstate & MOUSE_BUTTON(LEFT)) {
                 if (elem->attr & GUI_ATTR_CLICKABLE && 
                     elem->callbacks[GUI_EVENT_MOUSEDOWN]) {
                     elem->callbacks[GUI_EVENT_MOUSEDOWN](elem,
                             MOUSE_BUTTON(LEFT));
+                    if (interrupt) {
+                        guihandleinterrupt();
+                        return captured;
+                    }
                 }
                 BIT_SET(elem->state, GUI_STATE_MOUSE_LB);
             }
@@ -978,6 +1094,10 @@ guihandlemouse(GUIElement *elem, Event *e)
                     elem->callbacks[GUI_EVENT_MOUSEDOWN]) {
                     elem->callbacks[GUI_EVENT_MOUSEDOWN](elem,
                             MOUSE_BUTTON(RIGHT));
+                    if (interrupt) {
+                        guihandleinterrupt();
+                        return captured;
+                    }
                 }
                 BIT_SET(elem->state, GUI_STATE_MOUSE_RB);
             }
@@ -986,20 +1106,16 @@ guihandlemouse(GUIElement *elem, Event *e)
                     elem->callbacks[GUI_EVENT_MOUSEDOWN]) {
                     elem->callbacks[GUI_EVENT_MOUSEDOWN](elem,
                             MOUSE_BUTTON(MIDDLE));
+                    if (interrupt) {
+                        guihandleinterrupt();
+                        return captured;
+                    }
                 }
                 BIT_SET(elem->state, GUI_STATE_MOUSE_MB);
             }
             guisetfocus(elem);
 
-            /* Pull current layer up to top of stack */
-            for (i = 0; i < layerstack->size; i++) {
-                GUILayer *layer = listat(layerstack, i);
-
-                if (layer == elem->layer) {
-                    listmoveelem(layerstack, i, layerstack->size - 1);
-                }
-            }
-
+        
             /* Set keyboard focus */
             if (elem->attr & GUI_ATTR_TEXTINPUT) {
                 kbdfocus = elem;
@@ -1024,6 +1140,10 @@ guihandlemouse(GUIElement *elem, Event *e)
                     elem->callbacks[GUI_EVENT_MOUSEUP]) {
                     elem->callbacks[GUI_EVENT_MOUSEUP](elem,
                             MOUSE_BUTTON(LEFT));
+                    if (interrupt) {
+                        guihandleinterrupt();
+                        return captured;
+                    }
                 }
                 BIT_CLR(elem->state, GUI_STATE_MOUSE_LB);
             }
@@ -1033,6 +1153,10 @@ guihandlemouse(GUIElement *elem, Event *e)
                     elem->callbacks[GUI_EVENT_MOUSEUP]) {
                     elem->callbacks[GUI_EVENT_MOUSEUP](elem,
                             MOUSE_BUTTON(RIGHT));
+                    if (interrupt) {
+                        guihandleinterrupt();
+                        return captured;
+                    }
                 }
                 BIT_CLR(elem->state, GUI_STATE_MOUSE_RB);
             }
@@ -1042,6 +1166,10 @@ guihandlemouse(GUIElement *elem, Event *e)
                     elem->callbacks[GUI_EVENT_MOUSEUP]) {
                     elem->callbacks[GUI_EVENT_MOUSEUP](elem,
                             MOUSE_BUTTON(MIDDLE));
+                    if (interrupt) {
+                        guihandleinterrupt();
+                        return captured;
+                    }
                 }
                 BIT_CLR(elem->state, GUI_STATE_MOUSE_MB);
             }
@@ -1095,6 +1223,9 @@ guihandlemouse(GUIElement *elem, Event *e)
 
     /* If event falls through, unset focuses */
     if (e->type == SDL_MOUSEBUTTONDOWN && !captured) {
+        if (focus && focus->callbacks[GUI_EVENT_LOSEFOCUS]) {
+            focus->callbacks[GUI_EVENT_LOSEFOCUS](focus);
+        }
         focus = NULL;
 
         if (kbdfocus) {
@@ -1223,16 +1354,13 @@ guihandlekeyboard(GUIElement *elem, Event *e)
 void
 guisetfocus(GUIElement *elem)
 {
-    if (elem->parent) {
-        elem = elem->layer->baseelem;
-    }
     if (elem != focus) {
         if (elem->callbacks[GUI_EVENT_GAINFOCUS]) {
             elem->callbacks[GUI_EVENT_GAINFOCUS](elem);
         }
         if (focus) {
             if (focus->callbacks[GUI_EVENT_LOSEFOCUS]) {
-                focus->callbacks[GUI_EVENT_LOSEFOCUS](elem);
+                focus->callbacks[GUI_EVENT_LOSEFOCUS](focus);
             }
             BIT_CLR(focus->state, GUI_STATE_HASFOCUS);
         }
@@ -1258,9 +1386,10 @@ guigetfocus(void)
 int
 guimouseintersects(GUIElement *elem, int mx, int my)
 {
-    float rel_x, rel_y, rel_w, rel_h;
+    float rel_x, rel_y, rel_w, rel_h, mod;
     GUIElement *next = elem->parent;
     vec4 *transvec = &elem->layer->modelmat[3];
+    const float scr_ratio = guicam.height / (float)guicam.width;
  
     rel_x = 0; rel_y = 0;
     rel_w = 1; rel_h = 1;
@@ -1287,7 +1416,10 @@ guimouseintersects(GUIElement *elem, int mx, int my)
     rel_w *= elem->w * guicam.width;
     
     if (elem->attr & GUI_ATTR_WH_RESIZE) {
-        rel_y = (rel_y + elem->y) * guicam.width + (*transvec)[1];
+        float offset = elem->w * elem->ratio_h * elem->y;
+
+        rel_y = (rel_y + elem->y * scr_ratio - offset) *
+            guicam.width + (*transvec)[1];
         rel_h *= elem->w * elem->ratio_h * guicam.width;
     } else {
         rel_y = (rel_y + elem->y) * guicam.height + (*transvec)[1];
@@ -1314,12 +1446,36 @@ guideleteelem(GUIElement *elem, int cascade)
     uint i;
     List *children = elem->children;
     GUITextGrid *grid = elem->textgrid;
+    GUIElement *elem_tmp;
 
     if (cascade) {
         for (i = 0; i < children->size; i++) {
             guideleteelem(listat(children, i), 1);
         }
     }
+
+    if (elem->parent) {
+        for (i = 0; i < elem->parent->children->size; i++) {
+            elem_tmp = listat(elem->parent->children, i);
+
+            if (elem == elem_tmp) {
+                listremove(elem->parent->children, i);
+            }
+        }
+    }
+    
+    for (i = 0; i < elemtable->size; i++) {
+        if (elem == elemtable->vals[i]) {
+            htableremove(elemtable, elemtable->keys[i]);
+        }
+    }
+    
+    for (i = 0; i < elemlist->size; i++) {
+        if (elem == elemlist->elem[i]) {
+            listremove(elemlist, i);
+        }
+    }
+
     if (grid) {
         listdealloc(grid->glyphs);
         listdelete(grid->glyphs);

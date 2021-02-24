@@ -67,7 +67,8 @@ enum GUIAttrib {
     GUI_ATTR_CLICKABLE  = BIT(10),
     GUI_ATTR_RESIZETAB  = BIT(11),
     GUI_ATTR_NOCAPTURE  = BIT(12),
-    GUI_ATTR_WH_RESIZE  = BIT(13)
+    GUI_ATTR_WH_RESIZE  = BIT(13),
+    GUI_ATTR_BLOCKING   = BIT(14)
 };
 
 enum GUIResizeTabType {
@@ -173,9 +174,10 @@ GUIScrollBar *guiscrollbarcreate(uint width, uint h_extra,
         uint bar_w_offset, uint x_offset);
 void guilinklayer(GUIElement *elem, GUILayer *layer);
 void guiaddelem(GUIElement *dest, GUIElement *elem);
-GUIElement *guigetelem(char *id);
+GUIElement *guigetelem(const char *id);
 GUIElement *guigetfocus(void);
 GUIElement *guigetkbdfocus(void);
+Camera *guigetcamera(void);
 void guisetbordersize(GUIElement *elem, uint size);
 void guisetbacktexture(GUIElement *elem, int x, int y, int w, int h);
 void guisetedgetexture(GUIElement *elem, int x, int y, int w, int h);
@@ -183,17 +185,25 @@ void guisetcornertexture(GUIElement *elem, int x, int y, int w, int h);
 void guisetscrollbarbacktex(GUIElement *elem, int x, int y, int w, int h);
 void guisetscrollbarbartex(GUIElement *elem, int x, int y, int w, int h);
 void guisetcursortexture(GUIElement *elem, int x, int y, int w, int h);
+void guishowelem(GUIElement *elem);
+void guihideelem(GUIElement *elem);
+void guisignalinterrupt(GUIElement *elem);
+void guihandleinterrupt(void);
+
 void guisetupdatefunc(GUIElement *elem,
         void (*func)(GUIElement *elem, float dt, ...));
 void guiseteventcallback(GUIElement *elem, int eventtype,
         void (*func)(GUIElement *self, ...));
+
 int guihandle(Event *e);
 void guiupdate(float dt);
 void guirender(void);
 void guiredraw(void);
+void guiupdateelem(GUIElement *elem, float dt);
 void guideleteelem(GUIElement *elem, int cascade);
 void guideletelayer(GUILayer *layer);
 void guishutdown(void);
+
 int guimeshfont(GUITextGrid *grid, GUIElement *elem);
 void guicalcfontgridvertices(GUITextGrid *grid, int x_min, int y_min,
         int x_max, int y_max, float depth);
