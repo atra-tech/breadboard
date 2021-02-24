@@ -156,7 +156,7 @@ worldstart(void)
     shaderinit(&indicatorshader,
             "res/shader/indicatorvert.glsl",
             "res/shader/indicatorfrag.glsl");
-    texfind(&bgtex, "res/texture/background_small.png");
+    texfind(&bgtex, "res/texture/background.png");
     texfind(&circuittex, "res/texture/circuits.png");
     fontfind(&fonttex, "res/font/maledict_12x12.png", 12, 12);
 
