@@ -21,6 +21,7 @@ static void packinit_memory(Package *pack);
 static void packinit_input(Package *pack);
 static void packinit_output(Package *pack);
 static void packinit_clock(Package *pack);
+static void packinit_connector(Package *pack);
 
 static uint vec2_hash(const void *);
 static uint vec2_eq(const void *, const void *);
@@ -30,15 +31,12 @@ wirecreate(void)
 {
     Wire *wire;
 
-    wire = malloc(sizeof(Wire));
-    wire->active = 0;
-    wire->changed = 0;
-    wire->conv = 0;
-    wire->layer = 0;
+    wire = calloc(1, sizeof(Wire));
     wire->ins = listcreate();
     wire->outs = listcreate();
     wire->segs = listcreate();
     wire->tiles = htablecreate(vec2_hash, vec2_eq);
+    dlistinit(&wire->tile_data, sizeof(TileData));
 
     return wire;
 }
@@ -49,8 +47,9 @@ wiredelete(Wire *wire)
     listdelete(wire->ins);
     listdelete(wire->outs);
     listdelete(wire->segs);
-    htabledealloc(wire->tiles);
+    htabledeallockeys(wire->tiles);
     htabledelete(wire->tiles);
+    dlistdelete(&wire->tile_data);
     free(wire);
 }
 
@@ -62,6 +61,7 @@ wirebuild(World *world, uint x, uint y, uint layer)
     Segment *seg;
     List *agenda;
     Tile *tile, *tileadj;
+    TileData t_data;
     int *coord;
     uint i, found;
 
@@ -74,10 +74,20 @@ wirebuild(World *world, uint x, uint y, uint layer)
     coord[1] = y;
     listpushback(agenda, coord);
 
+    t_data.x = coord[0];
+    t_data.y = coord[1];
+    t_data.state = worldgettileat(world, coord[0], coord[1], layer)->state;
+    dlistpush(&wire->tile_data, &t_data);
+
     while (agenda->size > 0) {
         coord = listat(agenda, 0);
         tile = worldgettileat(world, coord[0], coord[1], layer);
         seg = worldgetsegmentat(world, coord[0], coord[1]);
+        
+        t_data.x = coord[0];
+        t_data.y = coord[1];
+        t_data.state = tile->state;
+        dlistpush(&wire->tile_data, &t_data);
 
         htableadd(wire->tiles, coord, tile);
         x = coord[0];
@@ -149,6 +159,7 @@ wirebuild(World *world, uint x, uint y, uint layer)
         }
         listremove(agenda, 0);
     }
+    listdelete(agenda);
 
     return wire;
 }
@@ -182,7 +193,6 @@ wireupdate(Wire *wire)
         result = 1;
     }
 
-
     /* Activate wire if any pins are enabled */
     for (i = 0; i < wire->ins->size; i++) {
         pin = listat(wire->ins, i);
@@ -203,7 +213,7 @@ wireupdate(Wire *wire)
     }
 
     /* Update world-space tiles for visual highlighting */
-    if (wire->tiles->occupied) {
+    if (!wire->sub) {
         if (wire->active) {
             for (i = 0; i < wire->tiles->size; i++) {
                 tile = wire->tiles->vals[i];
@@ -221,12 +231,11 @@ wireupdate(Wire *wire)
                 BIT_CLR(tile->state, TILE_POWERED);
             }
         }
-    }
-    
-    /* Queue segment remeshes */
-    for (i = 0; i < wire->segs->size; i++) {
-        seg = listat(wire->segs, i);
-        seg->dirty = 1;
+        /* Queue segment remeshes */
+        for (i = 0; i < wire->segs->size; i++) {
+            seg = listat(wire->segs, i);
+            seg->dirty = 1;
+        }
     }
 
     return result;
@@ -246,14 +255,12 @@ packcreate(uint type, const char *path)
     dlistinit(&pack->out_pins, sizeof(Pin));
 
     if (path) {
-        len = strlen(path) + 1;
-        pack->path = malloc(len * sizeof(char));
-        memcpy(pack->path, path, len);
+        pack->path = strdup(path);
     }
 
     switch (type) {
     case PACK_CIRCUIT:
-        packload(pack, path);
+        //packload(pack, path);
         break;
     case PACK_NOT:
         packinit_not(pack);
@@ -279,6 +286,8 @@ packcreate(uint type, const char *path)
     case PACK_CLOCK:
         packinit_clock(pack);
         break;
+    case PACK_CONNECTOR:
+        packinit_connector(pack);
     }
 
     return pack;
@@ -315,14 +324,10 @@ packdelete(Package *pack)
 void
 packload(Package *pack, const char *path)
 {
-    /*  If file does not exist in hashtable
-     *      Load file and add to hashtable
-     *      Fetch loaded data
-     *  Else
-     *      Fetch matching hashtable entry
-     *  Build new package from data
-     *
-     * */
+    char *target;
+
+    pack->x = 0;
+    pack->y = 0;
 }
 
 Package *
@@ -330,15 +335,19 @@ packcopy(Package *src)
 {
     size_t size;
     Package *dest;
+    World *world;
 
     dest = packcreate(src->type, src->path);
     dest->x = src->x;
     dest->y = src->y;
     dest->w = src->w;
     dest->h = src->h;
+    dest->seg_x = src->seg_x;
+    dest->seg_y = src->seg_y;
     dest->clockrate = src->clockrate;
     dest->state = src->state;
     dest->seg = src->seg;
+    dest->name = strdup(src->name);
 
     if (src->memory) {
         size = src->memory->size * sizeof(uint);
@@ -346,6 +355,14 @@ packcopy(Package *src)
         dest->memory->data = malloc(size);
         memcpy(dest->memory->data, src->memory->data, size);
         dest->memory->size = src->memory->size;
+    }
+
+    if (src->circuit) {
+        world = worldcreatefake();
+        worldbuild(world, src->circuit);
+        dest->circuit = circuitbuild(world, 1);
+        packbindcircuit(dest, dest->circuit);
+        worlddeletefake(world);
     }
 
     return dest;
@@ -370,6 +387,11 @@ packupdate(Package *pack, float dt)
         for (i = 0; i < pack->in_pins.size; i++) {
             pin = dlistat(&pack->in_pins, i);
             pingetsig(pin);
+
+            for (j = 0; j < pin->outs->size; j++) {
+                wire = listat(pin->outs, j);
+                wire->changed = 1;
+            }
         }
         circuitupdate(pack->circuit, dt);
 
@@ -395,9 +417,144 @@ packupdate(Package *pack, float dt)
     return 0;
 }
 
+
+/* Reorders a given list of packages by name */
+void
+sortpacklist(List *packs)
+{
+    uint i, min_idx;
+    List *sorted;
+    Package *pack, *pack_min;
+
+    sorted = listcreate();
+
+    while (packs->size > 0) {
+        pack_min = listat(packs, 0);
+        min_idx = 0;
+
+        for (i = 1; i < packs->size; i++) {
+            pack = listat(packs, i);
+
+            if (strcmp(pack->name, pack_min->name) < 0 &&
+                strlen(pack->name) <= strlen(pack_min->name)) {
+                pack_min = pack;
+                min_idx = i;
+            }
+        }
+        listpushback(sorted, pack_min);
+        listremove(packs, min_idx);
+    }
+    
+    for (i = 0; i < sorted->size; i++) {
+        listpushback(packs, listat(sorted, i));
+    }
+    listdelete(sorted);
+}
+
+/* Builds a package with circuit, basing size and 
+ * pins on circuit's input and output packages */
+void
+packbindcircuit(Package *pack, Circuit *circuit)
+{
+    uint i, j, k;
+    List *in_nodes, *out_nodes;
+    Package *pack_tmp;
+    Pin *pin, *pin_tmp, *wire_pin, new_pin;
+    Wire *wire;
+
+    in_nodes = listcreate();
+    out_nodes = listcreate();
+
+    /* Find and order input and output packs */
+    for (i = 0; i < circuit->packs->size; i++) {
+        pack_tmp = listat(circuit->packs, i);
+        
+        if (pack_tmp->type == PACK_INPUT) {
+            listpushback(in_nodes, pack_tmp);
+        } else if (pack_tmp->type == PACK_OUTPUT) {
+            listpushback(out_nodes, pack_tmp);
+        }
+    }
+    sortpacklist(in_nodes);
+    sortpacklist(out_nodes);
+
+    /* Set package dimensions appropriately */
+    if (in_nodes->size > out_nodes->size) {
+        pack->h = in_nodes->size;
+    } else {
+        pack->h = out_nodes->size;
+    }
+    pack->h = (pack->h < 1 ? 1 : pack->h);
+    pack->w = 3 + strlen(pack->name) / 3;
+
+    /* Create and configure pins, linking to internal wiring */
+    for (i = 0; i < in_nodes->size; i++) {
+        pack_tmp = listat(in_nodes, i);
+        pin = dlistat(&pack_tmp->out_pins, 0);
+        pininit(pack, &new_pin, -1, pack->h - i - 1, pack_tmp->name);
+
+        for (j = 0; j < pin->outs->size; j++) {
+            wire = listat(pin->outs, j);
+            listpushback(new_pin.outs, wire);
+        }
+        dlistpush(&pack->in_pins, &new_pin);
+    }
+
+    for (i = 0; i < out_nodes->size; i++) {
+        pack_tmp = listat(out_nodes, i);
+        pin = dlistat(&pack_tmp->in_pins, 0);
+        pininit(pack, &new_pin, pack->w, pack->h - i - 1, pack_tmp->name);
+        
+        for (j = 0; j < pin->ins->size; j++) {
+            wire = listat(pin->ins, j);
+            listpushback(new_pin.ins, wire);
+        }
+        dlistpush(&pack->out_pins, &new_pin);
+    }
+
+    /* Replace I/O node pin connections with external package pins */
+    for (i = 0; i < pack->in_pins.size; i++) {
+        pack_tmp = listat(in_nodes, i);
+        pin_tmp = dlistat(&pack_tmp->out_pins, 0);
+        pin = dlistat(&pack->in_pins, i);
+
+        for (j = 0; j < pin->outs->size; j++) {
+            wire = listat(pin->outs, j);
+
+            for (k = 0; k < wire->ins->size; k++) {
+                wire_pin = listat(wire->ins, k);
+                if (wire_pin == pin_tmp) {
+                    wire->ins->elem[k] = pin;
+                }
+            }
+        }
+    }
+
+    for (i = 0; i < pack->out_pins.size; i++) {
+        pack_tmp = listat(out_nodes, i);
+        pin_tmp = dlistat(&pack_tmp->in_pins, 0);
+        pin = dlistat(&pack->out_pins, i);
+
+        for (j = 0; j < pin->ins->size; j++) {
+            wire = listat(pin->ins, j);
+
+            for (k = 0; k < wire->outs->size; k++) {
+                wire_pin = listat(wire->outs, k);
+                if (wire_pin == pin_tmp) {
+                    wire->outs->elem[k] = pin;
+                }
+            }
+        }
+    }
+    listdelete(in_nodes);
+    listdelete(out_nodes);
+
+    pack->circuit = circuit;
+}
+
 /* Build a logical circuit from a world-space circuit */
 Circuit *
-circuitbuild(struct World *world)
+circuitbuild(World *world, int sub)
 {
     uint x, y, l, s, p, n;
     Circuit *circuit;
@@ -441,6 +598,7 @@ circuitbuild(struct World *world)
                                 wire = wirebuild(world, x, y, l);
                                 listpushback(circuit->wires, wire);
                             }
+                            wire->sub = sub;
                             listpushback(pin->outs, wire);
                             listpushback(wire->ins, pin);
                         }
@@ -479,7 +637,7 @@ circuitbuild(struct World *world)
             }
         }
     }
-
+    
     return circuit;
 }
 
@@ -492,6 +650,26 @@ circuitdelete(Circuit *circuit)
     listdelete(circuit->wires);
     listdelete(circuit->packs);
     free(circuit);
+}
+
+Circuit *
+circuitcopy(Circuit *circuit, int sub)
+{
+    uint i, j;
+    World *world;
+
+    /* XXX: Cheap and dirty circuit->world->circuit conversion.
+     * Compact copying, but quite inefficient. */
+/*
+    world = worldcreate();
+    worldbuild(world, circuit);
+    circuit = circuitbuild(world, sub);
+    worlddelete(world);
+*/
+    
+
+
+    return circuit;
 }
 
 /* Returns wire if the tile at the given position is already part of
@@ -554,6 +732,8 @@ circuitupdate(Circuit *circuit, float dt)
     uint i, found;
     Wire *wire;
     Package *pack;
+
+    int sub;
     
     found = 1;
 
@@ -562,6 +742,7 @@ circuitupdate(Circuit *circuit, float dt)
 
         for (i = 0; i < circuit->wires->size; i++) {
             wire = listat(circuit->wires, i);
+            sub = wire->sub;
 
             if (wire->changed) {
                 circuit->error = wireupdate(wire);
@@ -615,6 +796,10 @@ circuitupdatefull(Circuit *circuit, float dt)
 
     for (i = 0; i < circuit->packs->size; i++) {
         pack = listat(circuit->packs, i);
+
+        /*if (pack->circuit) {
+            circuitupdatefull(pack->circuit, dt);
+        }*/
         pack->changed = 1;
     }
 
@@ -626,7 +811,7 @@ circuitrebuild(struct World *world, Circuit **circuit)
 {
     schedulesegremeshing(*circuit);
     circuitclear(*circuit);
-    *circuit = circuitbuild(world);
+    *circuit = circuitbuild(world, 0);
     circuitclearerrors(*circuit);
     circuitupdatefull(*circuit, 0.0f);
 }
@@ -825,7 +1010,10 @@ packfunc_output(Package *pack)
 
     if (pack->state != in->state) {
         pack->state = in->state;
-        pack->seg->dirty = 1;
+
+        if (pack->seg) {
+            pack->seg->dirty = 1;
+        }
     }
 }
 
@@ -865,7 +1053,6 @@ packfunc_memory(Package *pack)
         a[i] = dlistat(&pack->in_pins, i + 8);
         pingetsig(a[i]);
         addr |= a[i]->state << i;
-        //addr = addr << 1;
     }
 
     /* Pull data from pins and store in memory */
@@ -875,7 +1062,6 @@ packfunc_memory(Package *pack)
             d[i] = dlistat(&pack->in_pins, i);
             pingetsig(d[i]);
             dat |= d[i]->state << i;
-            //dat = dat << 1;
         }
         pack->memory->data[addr] = dat;
     }
@@ -896,6 +1082,18 @@ packfunc_memory(Package *pack)
             o[i]->state = (out >> i) & 1;
         }
     }
+}
+
+void
+packfunc_connector(Package *pack)
+{
+    Pin *in, *out;
+
+    in = dlistat(&pack->in_pins, 0);
+    out = dlistat(&pack->out_pins, 0);
+
+    pingetsig(in);
+    out->state = in->state;
 }
 
 void
@@ -1127,6 +1325,24 @@ packinit_memory(Package *pack)
     dlistpush(&pack->out_pins, &pin);
     
     pininit(pack, &pin, PACK_MEM_W, 11, "O7");
+    dlistpush(&pack->out_pins, &pin);
+}
+
+void
+packinit_connector(Package *pack)
+{
+    Pin pin;
+
+    pack->w = PACK_CONNECT_W;
+    pack->h = PACK_CONNECT_H;
+    pack->func = packfunc_connector;
+    pack->name = malloc(4 * sizeof(char));
+    memcpy(pack->name, "", sizeof(char));
+
+    pininit(pack, &pin, -1, 0, "I");
+    dlistpush(&pack->in_pins, &pin);
+ 
+    pininit(pack, &pin, PACK_CONNECT_W, 0, "O");
     dlistpush(&pack->out_pins, &pin);
 }
 
