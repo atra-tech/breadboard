@@ -13,12 +13,13 @@ void main()
 {
     vec4 matdiffuse = texture2D(gui_tex, uvout).rgba;
 
-    if (matdiffuse.a > 0.0) {
+    /*if (matdiffuse.a > 0.0) {
         matdiffuse.r = colors.r;
         matdiffuse.g = colors.g;
         matdiffuse.b = colors.b;
         matdiffuse.a = colors.a;
-    }
+    }*/
+    matdiffuse *= colors;
 
     Color = matdiffuse;
 }
