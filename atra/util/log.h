@@ -11,7 +11,12 @@
 #ifndef ATRA_LOG_H
 #define ATRA_LOG_H
 
-#define LOG_ATTR(x) printf("\033[%dm", x)
+#ifdef _WIN32
+    #define LOG_ATTR(x)
+#else
+    #define LOG_ATTR(x) printf("\033[%dm", x)
+#endif
+
 #define LOG_DEFAULT_SIZE   64
 #define LOG_MAX_ENTRY_SIZE 512
 

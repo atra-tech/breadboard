@@ -164,11 +164,24 @@ logprint(int mode, char *str, ...)
     arg = NULL;
 }
 
+#ifdef _WIN32
+
+void
+logclear()
+{
+    return;
+}
+
+#else
+
 void
 logclear()
 {
     fprintf(stdout, "\033[2J\033[;H");
 }
+
+#endif
+
 
 int
 logsave()

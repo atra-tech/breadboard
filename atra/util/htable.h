@@ -31,6 +31,7 @@ void *htableget(HTable *, const void *key);
 void htableremove(HTable *, const void *key);
 void htabledeallocelem(HTable *, const void *key);
 void htabledealloc(HTable *);
+void htabledeallockeys(HTable *);
 void htabledelete(HTable *);
 
 uint htablestringhash(const void *);

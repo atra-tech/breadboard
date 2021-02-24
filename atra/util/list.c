@@ -12,6 +12,7 @@
 
 #include "list.h"
 #include "log.h"
+#include "util.h"
 
 static void listgrow(List *list);
 static void listshrink(List *list);
@@ -505,6 +506,12 @@ dlistdealloc(DList *list)
         elem = *((char **)list->data + i * list->elemsize);
         free(elem);
     }
+}
+
+void
+dlistdelete(DList *list)
+{
+    free(list->data);
 }
 
 /*

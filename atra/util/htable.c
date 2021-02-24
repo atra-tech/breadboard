@@ -252,13 +252,35 @@ htabledealloc(HTable *table)
         for (i = 0; i < size; i++) {
             if (keys[i]) {
                 free(keys[i]);
-                //free(vals[i]);
+                free(vals[i]);
                 keys[i] = NULL;
                 vals[i] = NULL;
             }
         }
     }
     table->occupied = 0;
+}
+
+/* Deallocate memory owned by all keys in table. */
+void
+htabledeallockeys(HTable *table)
+{
+    uint i;
+    uint size = table->size;
+    void **keys = table->keys;
+    void **vals = table->vals;
+
+    if (table) {
+        for (i = 0; i < size; i++) {
+            if (keys[i]) {
+                free(keys[i]);
+                keys[i] = NULL;
+                vals[i] = NULL;
+            }
+        }
+    }
+    table->occupied = 0;
+
 }
 
 /* Free the table and internal lists. 
