@@ -13,9 +13,6 @@
 #include "util/log.h"
 #include "util/util.h"
 
-#warning window: TODO: windoweventhandle() scroll functions must be \
-deferred to dev-defined callback function
-
 /* Event Callbacks */
 static void (*cb_scrollup)();
 static void (*cb_scrolldn)();

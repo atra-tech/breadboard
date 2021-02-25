@@ -331,7 +331,6 @@ guihandle(Event *e)
     return captured;
 }
 
-/* TODO: Refactor to be iterative */
 void
 guiupdateelem(GUIElement *elem, float dt)
 {
@@ -345,7 +344,6 @@ guiupdateelem(GUIElement *elem, float dt)
         child = listat(elem->children, i);
         guiupdateelem(child, dt);
     }
-
 }
 
 /* Iterate through all GUI elements and check for movement, resizing, 
@@ -353,7 +351,7 @@ guiupdateelem(GUIElement *elem, float dt)
 void
 guiupdate(float dt)
 {
-    uint i, j;
+    uint i;
     int mx, my, diff_mx, diff_my;
     GUIElement *elem;
     GUILayer *layer;
@@ -623,16 +621,12 @@ guimesh(GUIElement *elem)
 {
     uint i, totalrows;
     GUILayer *layer = elem->layer;
-    GUIElement *parent = elem->parent;
     GUIElement *next, *rel_elem;
     GUITextGrid *grid = elem->textgrid;
     VBuffer *vbo = &layer->vbo;
     List *agenda;
     int x_min, y_min, x_max, y_max, depth;
-    float rel_x, rel_y, rel_w, rel_h, mod_x, mod_y, scr_ratio;
-
-    mod_x = guicam.width;
-    mod_y = guicam.height;
+    float rel_x, rel_y, rel_w, rel_h, scr_ratio;
 
     vbufreset(vbo);
 
@@ -927,6 +921,8 @@ guisetscrollbarbartex(GUIElement *elem, int x, int y, int w, int h)
 void guisetcursortexture(GUIElement *elem, int x, int y, int w, int h)
 {
     TextureRect rect = {x, y, w, h};
+
+    UNUSED(rect);
 
     fontget(&elem->layer->fonttex, 0, elem->textgrid->cursor.uvs);
 }
@@ -1386,7 +1382,7 @@ guigetfocus(void)
 int
 guimouseintersects(GUIElement *elem, int mx, int my)
 {
-    float rel_x, rel_y, rel_w, rel_h, mod;
+    float rel_x, rel_y, rel_w, rel_h;
     GUIElement *next = elem->parent;
     vec4 *transvec = &elem->layer->modelmat[3];
     const float scr_ratio = guicam.height / (float)guicam.width;
@@ -1933,7 +1929,7 @@ guitextwritetext(GUIElement *elem)
 int
 guimeshfont(GUITextGrid *grid, GUIElement *elem)
 {
-    uint read, head, indexcount, totalrows, viewsize;
+    uint read, head, indexcount, totalrows, viewsize, cursoridx;
     GUILayer *layer = elem->layer;
     VBuffer *vbo = &layer->fontvbo;
     FontTex *fonttex = &layer->fonttex;
@@ -2019,37 +2015,15 @@ guimeshfont(GUITextGrid *grid, GUIElement *elem)
     }
     totalrows = grid->glyphs->size / grid->colcount;
 
-    /* Lock scrolling within range of text bounds */
-    /*if (elem->attr & GUI_ATTR_SCROLLABLE) {
-        uint maxstartrow = totalrows - grid->rowcount;
-
-        if (maxstartrow <= 0) {
-            if (grid->startrow > 0) {
-                grid->startrow = 0;
-
-                if (layer->textenabled) {
-                    vbufreset(&layer->fontvbo);
-                    listclear(layer->fontcolors);
-                }
-                guimeshfont(grid, elem);
-            }
-        } else if (grid->startrow > (uint)maxstartrow) {
-            grid->startrow = maxstartrow;
-
-            if (layer->textenabled) {
-                vbufreset(&layer->fontvbo);
-                listclear(layer->fontcolors);
-            }
-            guimeshfont(grid, elem);
-        }
-    }*/
+    /* TODO: Lock scrolling within range of text bounds */
 
     /* Render cursor */
     if (kbdfocus &&
             elem->attr & GUI_ATTR_TEXTINPUT &&
             grid->cursor.blink) {
-        uint cursoridx = indexcount;
-            
+        cursoridx = indexcount;
+        glyph = listat(grid->glyphs, grid->startrow * grid->colcount);
+
         veclistpush(&layer->fontcolors, glyph->color);
         veclistpush(&layer->fontcolors, glyph->color);
         veclistpush(&layer->fontcolors, glyph->color);

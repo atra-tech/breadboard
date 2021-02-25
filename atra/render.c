@@ -327,25 +327,25 @@ shaderloadvec4(uint loc, const vec4 vec)
 }
 
 void
-shaderloadmat4(uint loc, const mat4 mat)
+shaderloadmat4(uint loc, mat4 mat)
 {
     glUniformMatrix4fv(loc, 1, GL_FALSE, mat[0]);
 }
 
 void
-shaderloadprojviewmat(Shader *shader, const mat4 matrix)
+shaderloadprojviewmat(Shader *shader, mat4 matrix)
 {
     shaderloadmat4(shader->projviewmat, matrix);
 }
 
 void
-shaderloadmodelmat(Shader *shader, const mat4 matrix)
+shaderloadmodelmat(Shader *shader, mat4 matrix)
 {
     shaderloadmat4(shader->modelmat, matrix);
 }
 
 void
-shaderloadviewmat(Shader *shader, const mat4 matrix)
+shaderloadviewmat(Shader *shader, mat4 matrix)
 {
     shaderloadmat4(shader->viewmat, matrix);
 }
@@ -386,7 +386,7 @@ shaderaddvec4(Shader *shader, const char *name, const vec4 vec)
 }
 
 void
-shaderaddmat4(Shader *shader, const char *name, const mat4 mat)
+shaderaddmat4(Shader *shader, const char *name, mat4 mat)
 {
     uint loc = glGetUniformLocation(shader->prog, name);
     shaderloadmat4(loc, mat);

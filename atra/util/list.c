@@ -333,13 +333,12 @@ dlistpush(DList *list, void *elem)
 void
 dlistinsert(DList *list, void *elem, uint index)
 {
-    uint start, end, length;
+    uint start, length;
     
     if (list->size == list->cap) {
         dlistgrow(list);
     }
     start = index * list->elemsize;
-    end = list->size * list->elemsize;
     length = list->size * list->elemsize - start;
 
     memmove((char *)list->data + start + list->elemsize,
@@ -476,12 +475,11 @@ dlistfreemoverange(DList *list, uint start, uint end)
 void
 dlistmoveelem(DList *list, uint index, uint dest)
 {
-    uint start, mid, end, length;
+    uint start, mid, length;
     void *elem;
         
     start = index * list->elemsize;
     mid = dest * list->elemsize;
-    end = list->size * list->elemsize;
     length = mid - start - list->elemsize;
     elem = malloc(list->elemsize);
 

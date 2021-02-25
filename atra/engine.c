@@ -14,8 +14,6 @@
 #include "util/log.h"
 #include "util/stack.h"
 
-#warning engine: TODO: Qualify Multibuffer attribute with window vsync option
-
 static void initsdl(void);
 static void initimg(void);
 static void initglew(void);

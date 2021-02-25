@@ -21,6 +21,9 @@
 #define BIT_SET(a, b) a = (a | b)
 #define BIT_CLR(a, b) a = (a & ~b)
 
+#define UNUSED(a) (void)a
+#define SIGN(a) ((a > 0) - (a < 0))
+
 typedef unsigned char uchar;
 typedef unsigned short ushort;
 typedef unsigned int uint;
