@@ -21,7 +21,6 @@
 #define SEGMENTS_PER_ROW    WORLD_SIZE / SEGMENT_SIZE
 #define SEGMENT_COUNT       SEGMENTS_PER_ROW * SEGMENTS_PER_ROW
 #define LAYER_TILECOUNT     SEGMENT_SIZE * SEGMENT_SIZE
-#define WORLD_TILES_PER_ROW SEGMENTS_PER_ROW * SEGMENT_SIZE
 #define VIEW_DIST           4
 #define TILE_WIREGAP        0.2f
 #define WIRE_PERM_COUNT     16
@@ -39,13 +38,6 @@ enum layer_type {
     LAYER_GREEN,
     LAYER_BLUE,
     LAYER_TOTAL
-};
-
-enum tile_type {
-    TILE_NONE,
-    TILE_WIRE,
-    TILE_PACK,
-    TILE_PIN
 };
 
 enum tile_state {
@@ -67,11 +59,11 @@ enum wire_type {
 
 enum mouse_mode {
     MOUSE_NONE,
-    MOUSE_DRAW,
-    MOUSE_ERASE,
+    MOUSE_DRAW,     /* Drawing wires */
+    MOUSE_ERASE,    /* Erasing wires */
     MOUSE_GRAB,     /* Holding free segment */
     MOUSE_DRAGBOX,  /* Draw selection box */
-    MOUSE_BOXREADY, /* Selection box ready */
+    MOUSE_BOXREADY, /* Selection box ready to capture */
 };
 
 enum pack_textures {
@@ -154,16 +146,12 @@ void worldswitch(World *world);
 void worldhandle(Event *e);
 void worldupdate(float dt);
 void worldrender(Camera *cam);
-void worldrendermouseseg(Camera *cam);
+void worldrendermouseseg();
 void worlddelete(World *world);
 void worlddeletepacks(World *world);
 void worlddeletefake(World *world);
 void worldbuild(World *world, Circuit *circuit);
 void worldbuildfromselbox(World *dest, World *src, uint clearsrc);
-
-void worldsave(const char *path);
-void worldload(const char *path);
-
 void worldsetpath(World *world, const char *path);
 
 void freeseginit(FreeSegment *seg, float x, float y, uint w, uint h);
@@ -172,13 +160,10 @@ void freesegmesh(FreeSegment *seg);
 FreeSegment * freesegcopy(FreeSegment *seg);
 FreeSegment * freesegbuild(uint x, uint y, uint w, uint h, uint clearsrc);
 int freesegmerge(FreeSegment *seg, int x, int y);
+int freesegisempty(FreeSegment *seg);
 
 SelectBox * selboxget(void);
 void setmouseseg(FreeSegment *seg);
-
-
-
-//void worldaddpack(uint x, uint y, uint type, void *func);
 
 Segment * worldgetsegment(World *world, uint x, uint y);
 Segment * worldgetsegmentat(World *world, uint x, uint y);

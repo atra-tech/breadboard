@@ -52,10 +52,6 @@ static int quadintersectsquad(float ax, float ay, float aw, float ah,
 static void drawtext(VBuffer *vbo, VecList *colors, const char *text,
         uint fontsize, const float *color, float x_min, float x_max,
         float y_min, float y_max);
-static void vbopushquad(VBuffer *vbo, float x_min, float y_min,
-        float x_max, float y_max, float depth, float uvs[8]);
-static void vbopushquadinverted(VBuffer *vbo, float x_min, float y_min,
-        float x_max, float y_max, float depth, float uvs[8]);
 
 /*  
  *  VERTEX DATA
@@ -207,8 +203,6 @@ worldstart(void)
 void
 worldshutdown(void)
 {
-    int i;
-
     if (mouseseg) {
         freesegdelete(mouseseg);
     }
@@ -429,11 +423,17 @@ void
 freesegdelete(FreeSegment *seg)
 {
     uint i;
+    Package *pack;
 
     vbufdelete(&seg->wirevbo);
     vbufdelete(&seg->textvbo);
     veclistdelete(&seg->colors);
     veclistdelete(&seg->textcolors);
+
+    for (i = 0; i < seg->packs->size; i++) {
+        pack = listat(seg->packs, i);
+        packdelete(pack);
+    }
     listdelete(seg->packs);
 
     for (i = 0; i < LAYER_TOTAL; i++) {
@@ -465,12 +465,9 @@ selboxdelete(SelectBox *box)
     vbufdelete(&box->vbo);
 }
 
-/* TODO: Rework to use world stack via simstate.
- * Either that or remove all world params and make */
 void
 worldhandle(Event *e)
 {
-    static int prev_mx = 0, prev_my = 0;
     int mx, my;
     float wmx, wmy, px, py;
     uint i, mstate;
@@ -484,8 +481,13 @@ worldhandle(Event *e)
     wmx = cam->ent.x + (mx - (cam->width * 0.5f)) / (cam->zoom * 0.5f);
     wmy = cam->ent.y +
         ((cam->height - my) - (cam->height * 0.5f)) / (cam->zoom * 0.5f);
-
+    
     worldhandlekeys(e);
+
+    /* Return early if mouse is out of bounds */
+    if (wmx < 0 || wmx >= WORLD_SIZE || wmy < 0 || wmy >= WORLD_SIZE) {
+        return;
+    }
 
     if (e->type == SDL_MOUSEBUTTONDOWN) {
         if (e->button.button == SDL_BUTTON_LEFT) {
@@ -505,8 +507,6 @@ worldhandle(Event *e)
                             pack->state = !pack->state;
                             pack->changed = 1;
                             seg->dirty = 1;
-                            prev_mx = mx;
-                            prev_my = my;
                             return;
                         }
                     }
@@ -516,6 +516,8 @@ worldhandle(Event *e)
             if (currentwire != WIRE_NONE) {
                 mousemode = MOUSE_DRAW;
             } else if (mousemode == MOUSE_GRAB) {
+                /* Place mouse segment in world */
+
                 if (freesegmerge(mouseseg, wmx - (mouseseg->w * 0.5f) + 0.5f,
                             wmy - (mouseseg->h * 0.5f) + 0.5f)) {
                     freesegdelete(mouseseg);
@@ -531,15 +533,19 @@ worldhandle(Event *e)
             } else if (mousemode == MOUSE_BOXREADY) {
                 if (pointintersectsquad(wmx, wmy,
                             selbox.x, selbox.y, selbox.w, selbox.h)) {
-                    
                     mouseseg = freesegbuild(
                             selbox.x, selbox.y, selbox.w, selbox.h, 1);
-                    if (mouseseg) {
+
+                    if (mouseseg && freesegisempty(mouseseg)) {
+                        freesegdelete(mouseseg);
+                        mousemode = MOUSE_NONE;
+                        mouseseg = NULL;
+                    } else if (mouseseg) {
                         freesegmesh(mouseseg);
                         mousemode = MOUSE_GRAB;
-                        selbox.enabled = 0;
+                        circuitrebuild(mainworld, &mainworld->circuit);
                     }
-                    circuitrebuild(mainworld, &mainworld->circuit);
+                    selbox.enabled = 0;
                 } else {
                     mousemode = MOUSE_NONE;
                     selbox.enabled = 0;
@@ -570,8 +576,6 @@ worldhandle(Event *e)
                                     px, py, pack->w, pack->h)) {
                             ui_settargetpack(pack);
                             ui_iorename_show();
-                            prev_mx = mx;
-                            prev_my = my;
                             return;
                         }
                     }
@@ -614,19 +618,20 @@ worldhandle(Event *e)
         }
     } else if (e->type == SDL_MOUSEMOTION) {
         if (mousemode == MOUSE_DRAGBOX) {
-            selbox.w = wmx - selbox.x;
-            selbox.h = wmy - selbox.y;
+            /* Calculate new selbox dimensions */
+            selbox.w = wmx - selbox.x + (0.5f * SIGN(wmx - selbox.x));
+            selbox.h = wmy - selbox.y + (0.5f * SIGN(wmy - selbox.y));
             
             if (selbox.x + selbox.w < 0) {
-                selbox.w = 0;
-            } else if (selbox.x + selbox.w >= WORLD_TILES_PER_ROW) {
-                selbox.w = WORLD_TILES_PER_ROW - 1;
+                selbox.w = selbox.x;
+            } else if (selbox.x + selbox.w >= WORLD_SIZE) {
+                selbox.w = WORLD_SIZE - selbox.x;
             }
 
             if (selbox.y + selbox.h < 0) {
-                selbox.h = 0;
-            } else if (selbox.y + selbox.h >= WORLD_TILES_PER_ROW) {
-                selbox.h = WORLD_TILES_PER_ROW - 1;
+                selbox.h = selbox.y;
+            } else if (selbox.y + selbox.h >= WORLD_SIZE) {
+                selbox.h = WORLD_SIZE - selbox.y;
             }
             selboxmesh(&selbox);
         }
@@ -639,13 +644,7 @@ worldhandle(Event *e)
     } else if (!(mstate & MOUSE_BUTTON(RIGHT)) && mousemode == MOUSE_ERASE) {
         mousemode = MOUSE_NONE;
         circuitrebuild(mainworld, &mainworld->circuit);
-    } /*else if (!(mstate & MOUSE_BUTTON(LEFT)) && mousemode == MOUSE_DRAGBOX) {
-        mousemode = MOUSE_NONE;
-        selbox.enabled = 0;
-    }*/
-
-    prev_mx = mx;
-    prev_my = my;
+    }
 }
 
 void
@@ -712,6 +711,7 @@ tilehandlemouse(Tile *tile, float mx, float my)
     mx -= (int)mx;
     my -= (int)my;
 
+    /* Set wire states */
     if (mousemode == MOUSE_DRAW) {
         if (mx < TILE_WIREGAP) {
             if (mx > my) {
@@ -741,32 +741,6 @@ tilehandlemouse(Tile *tile, float mx, float my)
     else {
         /* TODO: Figure out best control-feel for wire deletion */
         tile->state = 0;
-
-        /*if (mx < TILE_WIREGAP) {
-            if (mx > my) {
-                BIT_CLR(tile->state, TILE_BOT);
-            } else if (mx > 1.0f - my){
-                BIT_CLR(tile->state, TILE_TOP);
-            } else {
-                BIT_CLR(tile->state, TILE_LEFT);
-            }
-        } else if (mx > 1.0f - TILE_WIREGAP) {
-            if (mx <= my) {
-                BIT_CLR(tile->state, TILE_BOT);
-            } else if (mx <= 1.0f - my){
-                BIT_CLR(tile->state, TILE_TOP);
-            } else {
-                BIT_CLR(tile->state, TILE_RIGHT);
-            }
-        } else {
-            if (my < TILE_WIREGAP) {
-                BIT_CLR(tile->state, TILE_BOT);
-            } else if (my > 1.0f - TILE_WIREGAP) {
-                BIT_CLR(tile->state, TILE_TOP);
-            } else {
-                BIT_CLR(tile->state, TILE_CENTRE);
-            }
-        }*/
     }
 }
 
@@ -776,7 +750,7 @@ void
 worldupdate(float dt)
 {
     int mx, my;
-    float tmp_mx, tmp_my;
+    float wmx, wmy;
     Camera *cam = getmaincamera();
     Segment *seg;
     Tile *tile;
@@ -785,21 +759,24 @@ worldupdate(float dt)
 
     if (mousemode == MOUSE_DRAW || mousemode == MOUSE_ERASE) {
         my = cam->height - my;
-        tmp_mx = cam->ent.x + (mx - (cam->width * 0.5)) / (cam->zoom * 0.5);
-        tmp_my = cam->ent.y + (my - (cam->height * 0.5)) / (cam->zoom * 0.5);
-
-        seg = worldgetsegmentat(mainworld, tmp_mx, tmp_my);
-        tile = worldgettileat(mainworld, tmp_mx, tmp_my, currentwire);
-        tilehandlemouse(tile, tmp_mx, tmp_my);
-        seg->dirty = 1;
+        wmx = cam->ent.x + (mx - (cam->width * 0.5)) / (cam->zoom * 0.5);
+        wmy = cam->ent.y + (my - (cam->height * 0.5)) / (cam->zoom * 0.5);
+    
+        if (wmx >= 0 && wmx < WORLD_SIZE &&
+                wmy >= 0 && wmy < WORLD_SIZE) {
+            seg = worldgetsegmentat(mainworld, wmx, wmy);
+            tile = worldgettileat(mainworld, wmx, wmy, currentwire);
+            tilehandlemouse(tile, wmx, wmy);
+            seg->dirty = 1;
+        }
     } else if (mousemode == MOUSE_GRAB && mouseseg) {
         my = cam->height - my;
-        tmp_mx = cam->ent.x + (mx - (cam->width * 0.5)) / (cam->zoom * 0.5);
-        tmp_my = cam->ent.y + (my - (cam->height * 0.5)) / (cam->zoom * 0.5);
+        wmx = cam->ent.x + (mx - (cam->width * 0.5)) / (cam->zoom * 0.5);
+        wmy = cam->ent.y + (my - (cam->height * 0.5)) / (cam->zoom * 0.5);
 
         glm_mat4_identity(mouseseg->modelmat);
-        glm_translate_x(mouseseg->modelmat, tmp_mx - (mouseseg->w * 0.5));
-        glm_translate_y(mouseseg->modelmat, tmp_my - (mouseseg->h * 0.5));
+        glm_translate_x(mouseseg->modelmat, wmx - (mouseseg->w * 0.5));
+        glm_translate_y(mouseseg->modelmat, wmy - (mouseseg->h * 0.5));
     }
     circuitresetwireconvs(mainworld->circuit);
     updateclocktimes(mainworld->circuit, dt);
@@ -903,7 +880,7 @@ worldrender(Camera *cam)
 }
 
 void
-worldrendermouseseg(Camera *cam)
+worldrendermouseseg()
 {
     if (mouseseg) {
         /* Render packages and wires */
@@ -925,18 +902,6 @@ worldrendermouseseg(Camera *cam)
                 mouseseg->textvbo.indxcount, GL_UNSIGNED_INT, NULL);
     }
     shaderunbind();
-}
-
-void
-worldsave(const char *path)
-{
-    /* TODO: Serialize world data and write to file */
-}
-
-void
-worldload(const char *path)
-{
-    /* TODO: Read file into world structure */
 }
 
 /* Construct a world from circuit data.  Used for data serialisation.
@@ -1189,7 +1154,7 @@ segmentmesh(Segment *seg)
             if (pack->type == PACK_INPUT) {
                 x_min = pack->x - 8 * PIX_SIZE - 
                     ((IO_FONT_SIZE + FONT_GAP) * len - FONT_GAP) * PIX_SIZE;
-            } else if (pack->type == PACK_OUTPUT) {
+            } else {
                 x_min = pack->x + pack->w + 8 * PIX_SIZE; 
             }
             y_min = (pack->y + (pack->h * 0.5f)) -
@@ -1513,7 +1478,7 @@ freesegmesh(FreeSegment *seg)
             if (pack->type == PACK_INPUT) {
                 x_min = pack->x - 8 * PIX_SIZE - 
                     ((IO_FONT_SIZE + FONT_GAP) * len - FONT_GAP) * PIX_SIZE;
-            } else if (pack->type == PACK_OUTPUT) {
+            } else {
                 x_min = pack->x + pack->w + 8 * PIX_SIZE; 
             }
             y_min = (pack->y + (pack->h * 0.5f)) -
@@ -1666,7 +1631,6 @@ void
 selboxmesh(SelectBox *box)
 {
     VBuffer *vbo;
-    uint idxcount;
     float x_min, x_max, y_min, y_max;
     vec3 vert;
     vec2 uv = {0.0f, 0.0f};
@@ -1674,7 +1638,6 @@ selboxmesh(SelectBox *box)
     ivec3 index;
 
     vbo = &box->vbo;
-    idxcount = 0;
     vert[2] = 7.0f;
 
     vbufreset(vbo);
@@ -1908,8 +1871,8 @@ freesegmerge(FreeSegment *seg, int x, int y)
     }
 
     /* Merge segment */
-    for (l = 0; l < seg->packs->size; l++) {
-        pack = listat(seg->packs, l);
+    while (seg->packs->size > 0) {
+        pack = listat(seg->packs, 0);
         wx = x + pack->x;
         wy = y + pack->y;
         tmpseg = worldgetsegmentat(mainworld, wx, wy);
@@ -1920,7 +1883,33 @@ freesegmerge(FreeSegment *seg, int x, int y)
         pack->seg_x = tmpseg->x;
         pack->seg_y = tmpseg->y;
         listpushback(tmpseg->packs, pack);
+        listremove(seg->packs, 0);
         tmpseg->dirty = 1;
+    }
+
+    return 1;
+}
+
+int
+freesegisempty(FreeSegment *seg)
+{
+    uint i, j, k;
+    Tile *tiles;
+
+    if (seg->packs->size) {
+        return 0;
+    }
+
+    for (i = 0; i < LAYER_TOTAL; i++) {
+        tiles = seg->tiles[i];
+
+        for (j = 0; j < seg->w; j++) {
+            for (k = 0; k < seg->h; k++) {
+                if (tiles[k + j * seg->h].state) {
+                    return 0;
+                }
+            }
+        }
     }
 
     return 1;
@@ -2070,7 +2059,7 @@ static void guibuttonfilesavedown(GUIElement *elem, ...);
 static void guibuttonpackopendown(GUIElement *elem, ...);
 static void guibuttonpacksavedown(GUIElement *elem, ...);
 
-static void guicheckmouseseg(GUIElement *elem);
+static void guidisablewirebuttons(void);
 
 enum gui_toolbar_buttons {
     BUTTON_NOT,
@@ -2182,6 +2171,8 @@ guibuttonnotdown(GUIElement *elem, ...)
     FreeSegment *seg;
     Package *pack;
 
+    guidisablewirebuttons();
+
     if ((mousemode == MOUSE_NONE || mousemode == MOUSE_BOXREADY) &&
             currentwire == WIRE_NONE) {
         guisetbacktexture(elem, 384, 320, 128, 128);
@@ -2202,6 +2193,8 @@ guibuttonordown(GUIElement *elem, ...)
 {
     FreeSegment *seg;
     Package *pack;
+
+    guidisablewirebuttons();
 
     if ((mousemode == MOUSE_NONE || mousemode == MOUSE_BOXREADY) &&
             currentwire == WIRE_NONE) {
@@ -2224,6 +2217,8 @@ guibuttonanddown(GUIElement *elem, ...)
     FreeSegment *seg;
     Package *pack;
 
+    guidisablewirebuttons();
+
     if ((mousemode == MOUSE_NONE || mousemode == MOUSE_BOXREADY) &&
             currentwire == WIRE_NONE) {
         guisetbacktexture(elem, 384, 320, 128, 128);
@@ -2244,6 +2239,8 @@ guibuttonxordown(GUIElement *elem, ...)
 {
     FreeSegment *seg;
     Package *pack;
+
+    guidisablewirebuttons();
 
     if ((mousemode == MOUSE_NONE || mousemode == MOUSE_BOXREADY) &&
             currentwire == WIRE_NONE) {
@@ -2266,6 +2263,8 @@ guibuttonindown(GUIElement *elem, ...)
     FreeSegment *seg;
     Package *pack;
 
+    guidisablewirebuttons();
+
     if ((mousemode == MOUSE_NONE || mousemode == MOUSE_BOXREADY) &&
             currentwire == WIRE_NONE) {
         guisetbacktexture(elem, 384, 320, 128, 128);
@@ -2286,6 +2285,8 @@ guibuttonoutdown(GUIElement *elem, ...)
 {
     FreeSegment *seg;
     Package *pack;
+
+    guidisablewirebuttons();
 
     if ((mousemode == MOUSE_NONE || mousemode == MOUSE_BOXREADY) &&
             currentwire == WIRE_NONE) {
@@ -2308,6 +2309,8 @@ guibuttonclockdown(GUIElement *elem, ...)
     FreeSegment *seg;
     Package *pack;
 
+    guidisablewirebuttons();
+
     if ((mousemode == MOUSE_NONE || mousemode == MOUSE_BOXREADY) &&
             currentwire == WIRE_NONE) {
         guisetbacktexture(elem, 384, 320, 128, 128);
@@ -2329,6 +2332,8 @@ guibuttonmemorydown(GUIElement *elem, ...)
     FreeSegment *seg;
     Package *pack;
 
+    guidisablewirebuttons();
+
     if ((mousemode == MOUSE_NONE || mousemode == MOUSE_BOXREADY) &&
             currentwire == WIRE_NONE) {
         guisetbacktexture(elem, 384, 320, 128, 128);
@@ -2349,6 +2354,8 @@ guibuttonconnectordown(GUIElement *elem, ...)
 {
     FreeSegment *seg;
     Package *pack;
+
+    guidisablewirebuttons();
 
     if ((mousemode == MOUSE_NONE || mousemode == MOUSE_BOXREADY) &&
             currentwire == WIRE_NONE) {
@@ -2456,6 +2463,30 @@ guibuttonbluedown(GUIElement *elem, ...)
     elem->layer->dirty = 1;
 }
 
+void
+guidisablewirebuttons(void)
+{
+    GUIElement *elem;
+
+    switch (currentwire) {
+    case WIRE_RED:
+        elem = guigetelem("toolbar_red");
+        break;
+    case WIRE_BLUE:
+        elem = guigetelem("toolbar_blue");
+        break;
+    case WIRE_GREEN:
+        elem = guigetelem("toolbar_green");
+        break;
+    default:
+        return;
+    }
+    guisetbacktexture(elem, 128, 320, 128, 128);
+    mousemode = MOUSE_NONE;
+    currentwire = WIRE_NONE;
+    elem->layer->dirty = 1;
+}
+
 void 
 guibuttonredup(GUIElement *elem, ...)
 {
@@ -2540,7 +2571,11 @@ guibuttonbluemouseleave(GUIElement *elem, ...)
 void 
 guibuttonfilenewdown(GUIElement *elem, ...)
 {
-    /* Open file name prompt */
+    /* Open file naming prompt */
+    UNUSED(elem);
+
+    guidisablewirebuttons();
+
     ui_requestnewfile();
     ui_confirmbox_fileload_preloadsave();
 }
@@ -2548,21 +2583,33 @@ guibuttonfilenewdown(GUIElement *elem, ...)
 void
 guibuttonfileopendown(GUIElement *elem, ...)
 {
-    /* Open file open window */
+    /* Open file opening window */
+    UNUSED(elem);
+
+    guidisablewirebuttons();
+
     ui_fileload_show();
 }
 
 void
 guibuttonfilesavedown(GUIElement *elem, ...)
 {
-    /* Open file save window */
+    /* Open file saving window */
+    UNUSED(elem);
+
+    guidisablewirebuttons();
+
     ui_filesave_show();
 }
 
 void
 guibuttonpackopendown(GUIElement *elem, ...)
 {
-    /* Open user pack open window */
+    /* Open user pack opening window */
+    UNUSED(elem);
+
+    guidisablewirebuttons();
+
     if (ui_packload_isopen()) {
         ui_packload_hide();
     } else {
@@ -2574,6 +2621,10 @@ void
 guibuttonpacksavedown(GUIElement *elem, ...)
 {
     /* Open user pack name prompt */
+    UNUSED(elem);
+
+    guidisablewirebuttons();
+
     if (selbox.enabled) {
         ui_packsave_show();
     } else {
@@ -2587,7 +2638,6 @@ guibuttonpacksavedown(GUIElement *elem, ...)
 void
 guifilebarcreate(void)
 {
-    uint i;
     GUILayer *layer;
     GUIElement *base, *base_right;
     GUIElement *new, *open, *save;
