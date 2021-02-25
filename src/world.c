@@ -504,6 +504,7 @@ worldhandle(Event *e)
 
                         if (pointintersectsquad(wmx, wmy, 
                                     px, py, pack->w, pack->h)) {
+                            circuitclearerrors(mainworld->circuit);
                             pack->state = !pack->state;
                             pack->changed = 1;
                             seg->dirty = 1;
