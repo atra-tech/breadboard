@@ -121,7 +121,6 @@ uint wireupdate(Wire *wire);
 
 Circuit * circuitbuild(struct World *world, int sub);
 void circuitdelete(Circuit *circuit);
-Circuit * circuitcopy(Circuit *circuit, int sub);
 Wire * circuitgetwireat(Circuit *circuit, uint x, uint y, uint layer);
 void circuitclear(Circuit *circuit);
 void circuitupdate(Circuit *circuit, float dt);
@@ -132,7 +131,6 @@ void circuitresetwireconvs(Circuit *circuit);
 
 Package * packcreate(uint type, const char *path);
 void packdelete(Package *pack);
-void packload(Package *pack, const char *path);
 Package * packcopy(Package *pack);
 uint packupdate(Package *pack, float dt);
 void packbindcircuit(Package *pack, Circuit *circuit);

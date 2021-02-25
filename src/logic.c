@@ -105,7 +105,7 @@ wirebuild(World *world, uint x, uint y, uint layer)
         }
 
         /* Queue connected tiles */
-        if (tile->state & TILE_TOP && y < WORLD_TILES_PER_ROW - 1) {
+        if (tile->state & TILE_TOP && y < WORLD_SIZE - 1) {
             tileadj = worldgettileat(world, x, y + 1, layer);
 
             if (tileadj->state & TILE_BOT) {
@@ -144,7 +144,7 @@ wirebuild(World *world, uint x, uint y, uint layer)
                 }
             }
         }
-        if (tile->state & TILE_RIGHT && x < WORLD_TILES_PER_ROW - 1) {
+        if (tile->state & TILE_RIGHT && x < WORLD_SIZE - 1) {
             tileadj = worldgettileat(world, x + 1, y, layer);
 
             if (tileadj->state & TILE_LEFT) {
@@ -244,7 +244,6 @@ wireupdate(Wire *wire)
 Package *
 packcreate(uint type, const char *path)
 {
-    size_t len;
     Package *pack;
 
     pack = calloc(1, sizeof(Package));
@@ -319,15 +318,6 @@ packdelete(Package *pack)
         pindelete(dlistat(&pack->out_pins, i));
     }
     free(pack->name);
-}
-
-void
-packload(Package *pack, const char *path)
-{
-    char *target;
-
-    pack->x = 0;
-    pack->y = 0;
 }
 
 Package *
@@ -644,32 +634,10 @@ circuitbuild(World *world, int sub)
 void
 circuitdelete(Circuit *circuit)
 {
-    uint i;
-
     circuitclear(circuit);
     listdelete(circuit->wires);
     listdelete(circuit->packs);
     free(circuit);
-}
-
-Circuit *
-circuitcopy(Circuit *circuit, int sub)
-{
-    uint i, j;
-    World *world;
-
-    /* XXX: Cheap and dirty circuit->world->circuit conversion.
-     * Compact copying, but quite inefficient. */
-/*
-    world = worldcreate();
-    worldbuild(world, circuit);
-    circuit = circuitbuild(world, sub);
-    worlddelete(world);
-*/
-    
-
-
-    return circuit;
 }
 
 /* Returns wire if the tile at the given position is already part of
@@ -733,8 +701,6 @@ circuitupdate(Circuit *circuit, float dt)
     Wire *wire;
     Package *pack;
 
-    int sub;
-    
     found = 1;
 
     while (found) {
@@ -742,7 +708,6 @@ circuitupdate(Circuit *circuit, float dt)
 
         for (i = 0; i < circuit->wires->size; i++) {
             wire = listat(circuit->wires, i);
-            sub = wire->sub;
 
             if (wire->changed) {
                 circuit->error = wireupdate(wire);
@@ -1080,6 +1045,11 @@ packfunc_memory(Package *pack)
         for (i = 0; i < 8; i++) {
             o[i] = dlistat(&pack->out_pins, i);
             o[i]->state = (out >> i) & 1;
+        }
+    } else {
+        for (i = 0; i < 8; i++) {
+            o[i] = dlistat(&pack->out_pins, i);
+            o[i]->state = 0;
         }
     }
 }
