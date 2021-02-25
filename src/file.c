@@ -221,7 +221,6 @@ Package *
 read_pack(byte **data)
 {
     uint tag;
-    Pin *pin;
     World *world; 
     Package *pack;
     Circuit *circuit;
@@ -382,7 +381,7 @@ read_string(byte **data, uint len)
 void
 read_array(byte **data, void *dest, size_t nitems, size_t size)
 {
-    uint i, len;
+    uint len;
 
     len = nitems * size;
     memcpy(dest, data, len);
@@ -482,9 +481,6 @@ write_segment(FileData *data, Segment *seg)
 void
 write_pack(FileData *data, Package *pack)
 {
-    uint i;
-    Pin *pin;
-
     write_uint(data, pack->type);
     write_uint(data, pack->x);
     write_uint(data, pack->y);

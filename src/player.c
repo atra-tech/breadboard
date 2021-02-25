@@ -14,11 +14,15 @@
 #include "core.h"
 #include "util/log.h"
 
-#define PLAYER_SPEED 16
+#define PLAYER_SPEED    (1024.0f / camera->zoom)
+
+static Camera *camera;
 
 void
 playerinit(Player *player)
 {
+    camera = getmaincamera();
+
     memset(player, 0, sizeof(Player));
     player->ent.x = 512;
     player->ent.y = 512;
@@ -30,6 +34,8 @@ playerinit(Player *player)
 void
 playerhandle(Player *player, Event *e)
 {
+    UNUSED(e);
+
     glm_vec3_zero(player->vel);
 
     if (keystate(KEYCODE(LSHIFT)) ||
@@ -38,16 +44,16 @@ playerhandle(Player *player, Event *e)
     } else {
         player->speed = PLAYER_SPEED;
     }
-    if (keystate(KEYCODE(w))) {
+    if (keystate(KEYCODE(w)) || keystate(KEYCODE(UP))) {
         player->vel[1] = player->speed;
     }
-    if (keystate(KEYCODE(s))) {
+    if (keystate(KEYCODE(s)) || keystate(KEYCODE(DOWN))) {
         player->vel[1] = -player->speed;
     }
-    if (keystate(KEYCODE(d))) {
+    if (keystate(KEYCODE(d)) || keystate(KEYCODE(RIGHT))) {
         player->vel[0] = player->speed;
     }
-    if (keystate(KEYCODE(a))) {
+    if (keystate(KEYCODE(a)) || keystate(KEYCODE(LEFT))) {
         player->vel[0] = -player->speed;
     }
 }

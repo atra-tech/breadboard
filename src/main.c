@@ -8,10 +8,10 @@
  *
  *  */
 
+#include "util/util.h"
 #include "util/log.h"
 #include "util/timer.h"
 #include "core.h"
-#include "menustate.h"
 #include "simstate.h"
 
 int
@@ -20,6 +20,9 @@ main(int argc, char **argv)
     Window *window;
     int running = 1;
     float dt;
+
+    UNUSED(argc);
+    UNUSED(argv);
 
     initatraengine();
     window = getmainwindow();

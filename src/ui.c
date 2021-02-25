@@ -29,7 +29,6 @@ static void ui_updatefunc_centertext(GUIElement *elem, float dt, ...);
 static void ui_updatefunc_heightfittext(GUIElement *elem, float dt, ...);
 static void ui_textfield_gainfocus(GUIElement *elem, ...);
 static void ui_textfield_losefocus(GUIElement *elem, ...);
-static void ui_save_noconfirm(GUIElement *elem, ...);
 
 /* User-defined pack saving functions */
 static void ui_packsave_init(void);
@@ -40,9 +39,6 @@ static void ui_packsave_cancel_mousedown(GUIElement *elem, ...);
 static void ui_packload_init(void);
 static GUIElement * ui_packload_entry_init(const char *name, GUIElement *parent);
 static void ui_packload_entry_mousedown(GUIElement *elem, ...);
-static void ui_packload_entry_mouseup(GUIElement *elem, ...);
-static void ui_packload_entry_mouseover(GUIElement *elem, ...);
-static void ui_packload_entry_mouseleave(GUIElement *elem, ...);
 
 /* File saving interface functions */
 static void ui_filesave_init(void);
@@ -56,8 +52,6 @@ static void ui_fileload_entry_mousedown(GUIElement *elem, ...);
 static void ui_fileload_entry_mouseup(GUIElement *elem, ...);
 static void ui_fileload_entry_mouseover(GUIElement *elem, ...);
 static void ui_fileload_entry_mouseleave(GUIElement *elem, ...);
-static void ui_fileload_entry_scrolldown(GUIElement *elem, ...);
-static void ui_fileload_entry_scrollup(GUIElement *elem, ...);
 static void ui_fileload_open_mousedown(GUIElement *elem, ...);
 static void ui_fileload_delete_mousedown(GUIElement *elem, ...);
 static void ui_fileload_cancel_mousedown(GUIElement *elem, ...);
@@ -1381,6 +1375,7 @@ ui_tooltip_update(GUIElement *elem, float dt, ...)
     float pix_w, pix_h;
     GUIElement *tbox;
 
+    UNUSED(dt);
     guishowelem(elem);
 
     /* Calculate required width of base element */
@@ -1419,6 +1414,7 @@ ui_updatefunc_centertext(GUIElement *elem, float dt, ...)
     float rel_w, rel_h;
     GUIElement *next, *rel_elem;
 
+    UNUSED(dt);
     rel_elem = elem->parent;
     next = rel_elem->parent;
 
@@ -1458,14 +1454,12 @@ ui_updatefunc_centertext(GUIElement *elem, float dt, ...)
 void
 ui_updatefunc_heightfittext(GUIElement *elem, float dt, ...)
 {
-    int len;
     float rel_h, pix_h;
     GUIElement *next, *rel_elem;
 
+    UNUSED(dt);
     rel_elem = elem->parent;
     next = rel_elem->parent;
-
-    len = strlen(elem->textgrid->text);
 
     rel_h = 1.0f;
 
@@ -1573,6 +1567,8 @@ ui_packsave_save_mousedown(GUIElement *elem, ...)
     char *fname;
     uint i, len;
 
+    UNUSED(elem);
+
     if (selbox->enabled) {
         textfield = guigetelem("ui_packsave_text");
         fname = textfield->textgrid->text;
@@ -1656,6 +1652,8 @@ ui_filesave_save_mousedown(GUIElement *elem, ...)
     uint i, len;
     World *world;
 
+    UNUSED(elem);
+
     textfield = guigetelem("ui_filesave_text");
     fname = textfield->textgrid->text;
     len = strlen(fname);
@@ -1705,6 +1703,8 @@ ui_filesave_cancel_mousedown(GUIElement *elem, ...)
 {
     World *world;
     GUIElement *textfield;
+
+    UNUSED(elem);
 
     world = worldtop();
     textfield = guigetelem("ui_filesave_text");
@@ -1787,20 +1787,10 @@ ui_fileload_entry_mouseleave(GUIElement *elem, ...)
 }
 
 void
-ui_fileload_entry_scrolldown(GUIElement *elem, ...)
-{
-    ui_filelist_scrolldown(elem);
-}
-
-void
-ui_fileload_entry_scrollup(GUIElement *elem, ...)
-{
-    ui_filelist_scrollup(elem);
-}
-
-void
 ui_fileload_open_mousedown(GUIElement *elem, ...)
 {
+    UNUSED(elem);
+
     if (files.select_enabled) {
         ui_confirmbox_fileload_preloadsave();
         ui_fileload_hide();
@@ -1814,9 +1804,7 @@ void
 ui_fileload_delete_mousedown(GUIElement *elem, ...)
 {
     /* Remove entry from filelist and rebuild list */
-
-    /* XXX: May cause segfault in GUI system due to element deleting itself
-     *      Should cause escape and recalc of whole layer */
+    UNUSED(elem);
 
     if (files.select_enabled) {
         ui_confirmbox_fileload_deletionconfirm();
@@ -1830,6 +1818,7 @@ void
 ui_fileload_cancel_mousedown(GUIElement *elem, ...)
 {
     /* Hide fileload base elem */
+    UNUSED(elem);
     files.select_enabled = 0;
     files.select_index = 0;
     ui_fileload_hide();
@@ -2001,6 +1990,8 @@ ui_filelist_openpack(uint index)
 void
 ui_filelist_scrollup(GUIElement *elem, ...)
 {
+    UNUSED(elem);
+
     if (files.toprow > 0) {
         files.toprow--;
     }
@@ -2010,6 +2001,8 @@ ui_filelist_scrollup(GUIElement *elem, ...)
 void
 ui_filelist_scrolldown(GUIElement *elem, ...)
 {
+    UNUSED(elem);
+
     if (files.toprow < files.paths->size - 1) {
         files.toprow++;
     }
@@ -2120,6 +2113,8 @@ ui_confirmbox_fileload_deletionconfirm(void)
 void
 ui_confirmbox_filesave_overwrite_save(GUIElement *elem, ...)
 {
+    UNUSED(elem);
+
     filesaveworld(target_path, worldtop());
 
     if (files.select_enabled) {
@@ -2139,6 +2134,8 @@ ui_confirmbox_filesave_overwrite_save(GUIElement *elem, ...)
 void
 ui_confirmbox_filesave_overwrite_cancel(GUIElement *elem, ...)
 {
+    UNUSED(elem);
+
     ui_confirmbox_hide();
 }
 
@@ -2151,6 +2148,8 @@ ui_confirmbox_packsave_overwrite_save(GUIElement *elem, ...)
     FreeSegment *seg;
     Package *pack;
     char *fname;
+
+    UNUSED(elem);
 
     /* Save package */
     textfield = guigetelem("ui_packsave_text");
@@ -2181,12 +2180,16 @@ ui_confirmbox_packsave_overwrite_save(GUIElement *elem, ...)
 void
 ui_confirmbox_packsave_overwrite_cancel(GUIElement *elem, ...)
 {
+    UNUSED(elem);
+
     ui_confirmbox_hide();
 }
 
 void
 ui_confirmbox_fileload_preloadsave_yes(GUIElement *elem, ...)
 {
+    UNUSED(elem);
+
     ui_filesave_show();
     ui_fileload_hide();
     ui_confirmbox_hide();
@@ -2195,6 +2198,8 @@ ui_confirmbox_fileload_preloadsave_yes(GUIElement *elem, ...)
 void
 ui_confirmbox_fileload_preloadsave_no(GUIElement *elem, ...)
 {
+    UNUSED(elem);
+
     World *world;
 
     if (files.select_enabled) {
@@ -2212,6 +2217,8 @@ ui_confirmbox_fileload_preloadsave_no(GUIElement *elem, ...)
 void
 ui_confirmbox_fileload_preloadsave_cancel(GUIElement *elem, ...)
 {
+    UNUSED(elem);
+
     files.select_enabled = 0;
     newfile_request = 0;
     ui_confirmbox_hide();
@@ -2220,6 +2227,8 @@ ui_confirmbox_fileload_preloadsave_cancel(GUIElement *elem, ...)
 void
 ui_confirmbox_fileload_deletionconfirm_delete(GUIElement *elem, ...)
 {
+    UNUSED(elem);
+
     ui_filelist_deletefile(files.select_index);
     ui_confirmbox_hide();
 }
@@ -2227,6 +2236,8 @@ ui_confirmbox_fileload_deletionconfirm_delete(GUIElement *elem, ...)
 void
 ui_confirmbox_fileload_deletionconfirm_cancel(GUIElement *elem, ...)
 {
+    UNUSED(elem);
+
     ui_confirmbox_hide();
 }
 
@@ -2234,6 +2245,8 @@ void
 ui_iorename_confirm_mousedown(GUIElement *elem, ...)
 {
     GUIElement *textbox;
+
+    UNUSED(elem);
 
     textbox = guigetelem("ui_iorename_text");
 
@@ -2249,6 +2262,8 @@ ui_iorename_confirm_mousedown(GUIElement *elem, ...)
 void
 ui_iorename_cancel_mousedown(GUIElement *elem, ...)
 {
+    UNUSED(elem);
+
     ui_iorename_hide();
 }
 
