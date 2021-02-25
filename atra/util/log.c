@@ -189,7 +189,7 @@ logsave()
     int i;
     FILE* logfile;
 
-    logfile = fopen("log.dat", "a");
+    logfile = fopen("log.dat", "w");
     if (logfile == NULL) {
         logprint(LOG_ERROR, "log: Error writing to log file: " \
                             "Unable to open file");
