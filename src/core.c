@@ -31,10 +31,6 @@ initatraengine(void)
 
     camerainit(&camera, DEFAULT_WIDTH, DEFAULT_HEIGHT, CAMERA_ORTHOGRAPHIC);
     camera.zoom = 64;
-    /*glm_ortho(0, camera.width / camera.zoom,
-              0, camera.height / camera.zoom,
-              0.1f, 1000.0f,
-              camera.projmat);*/
 
     guiinit(&camera);
 
@@ -53,6 +49,7 @@ stopatraengine(void)
     texquit();
     contextdelete(&context);
     windowdelete(&window);
+    atrashutdown();
     logstop();
 }
 

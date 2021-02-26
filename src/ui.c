@@ -20,6 +20,8 @@
 #include "file.h"
 #include "log.h"
 
+#include <string.h>
+
 /* General callbacks */
 static void ui_button_mouseup(GUIElement *elem, ...);
 static void ui_button_mouseover(GUIElement *elem, ...);
@@ -1640,7 +1642,6 @@ ui_packload_entry_mousedown(GUIElement *elem, ...)
             break;
         }
     }
-
 }
 
 void
@@ -1822,6 +1823,7 @@ ui_fileload_cancel_mousedown(GUIElement *elem, ...)
     files.select_index = 0;
     ui_fileload_hide();
 }
+
 
 /* 
  *  File list functions 

@@ -63,7 +63,8 @@ simstatestop(void)
     }
     ui_shutdown();
     worldshutdown();
-    atrapopstate();
+    atrapopstate(0);
+    stopatraengine();
 }
 
 void

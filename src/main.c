@@ -28,7 +28,7 @@ main(int argc, char **argv)
 
     simstateinit();
     simstatestart();
-    
+
     while (1) {
         timerglobalupdate();
         dt = timerglobaldiff() * 0.001;
@@ -40,7 +40,6 @@ main(int argc, char **argv)
         atraswapbuffers(window);
     }
     simstatestop();
-    stopatraengine();
 
     return 0;
 }
