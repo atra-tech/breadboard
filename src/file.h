@@ -4,8 +4,8 @@
  *  Copyright Robert Saarloos, All rights reserved.
  *
  *  Description:
- *  Provides a set of tools for world, circuit, and lesson serialisation,
- *  saving, and loading.  Caches loaded files for later use.
+ *  Provides a set of tools for world data serialisation,
+ *  saving, and loading.
  *
  *  */
 
@@ -45,8 +45,6 @@ typedef struct FileData{
     byte *data;
 } FileData;
 
-//void filesysinit(void);
-//void filesysshutdown(void);
 int filegetworld(const char *path, struct World *world);
 int filesaveworld(const char *path, struct World *world);
 

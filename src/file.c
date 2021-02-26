@@ -4,8 +4,8 @@
  *  Copyright Robert Saarloos, All rights reserved.
  *
  *  Description:
- *  Provides a set of tools for world, circuit, and lesson serialisation,
- *  saving, and loading.  Caches loaded files for later use.
+ *  Provides a set of tools for world data serialisation,
+ *  saving, and loading.
  *
  *  */
 
@@ -25,34 +25,19 @@ static int write_body(FileData *data, World *world);
 /* Circuit-specific file functions */
 static void read_segment(byte **data, Segment *seg);
 static Package * read_pack(byte **data);
-static Pin * read_pin(byte **data);
-static Circuit * read_circuit(byte **data);
 static Memory * read_memory(byte **data);
 static void write_segment(FileData *data, Segment *seg);
 static void write_pack(FileData *data, Package *pack);
-static void write_pin(FileData *data, Pin *pin);
-static void write_circuit(FileData *data, Circuit *circuit);
 static void write_memory(FileData *data, Memory *memory);
 
 /* Primitive type file functions */
-static int read_bool(byte **data);
-static char read_char(byte **data);
-static int read_int(byte **data);
-static uchar read_uchar(byte **data);
 static uint read_uint(byte **data);
-static float read_float(byte **data);
-static void write_bool(FileData *data, int val);
 static void write_char(FileData *data, char val);
-static void write_int(FileData *data, int val);
-static void write_uchar(FileData *data, uchar val);
 static void write_uint(FileData *data, uint val);
-static void write_float(FileData *data, float val);
 
 /* Composite type file functions */
 static char * read_string(byte **data, uint len);
-static void read_array(byte **data, void *dest, size_t nitems, size_t size);
 static void write_string(FileData *data, uint len, char *str);
-static void write_array(FileData *data, void *src, size_t nitems, size_t size);
 
 /* Run-length encoding file functions */
 static void rle_decode(byte **data, uint *dest, size_t nitems);
@@ -97,6 +82,8 @@ filesaveworld(const char *path, World *world)
     write_body(&data, world);
 
     savefile(path, (char *)data.data, data.size);
+
+    filedata_delete(&data);
 
     return 0;
 }
@@ -143,7 +130,6 @@ filedata_delete(FileData *data)
  *
  * */
 
-/* Checks header and advances pointer.  Returns non-zero on mismatch. */
 int
 read_header(byte **data)
 {
@@ -270,36 +256,6 @@ read_pack(byte **data)
     return pack;
 }
 
-Pin *
-read_pin(byte **data)
-{
-    Pin *pin;
-
-    pin = malloc(sizeof(Pin));
-    pin->x = read_int(data);
-    pin->y = read_int(data);
-    pin->state = read_uint(data);
-    pin->name = read_string(data, read_uint(data));
-    pin->ins = listcreate();
-    pin->outs = listcreate();
-
-    return pin;
-}
-
-Circuit *
-read_circuit(byte **data)
-{
-    World *world;
-    Circuit *circuit;
-
-    world = worldcreatefake();
-    read_body(data, world);
-    circuit = circuitbuild(world, 1, 1);
-    worlddeletefake(world);
-
-    return circuit;
-}
-
 Memory *
 read_memory(byte **data)
 {
@@ -313,56 +269,11 @@ read_memory(byte **data)
     return mem;
 }
 
-int
-read_bool(byte **data)
-{
-    int p = *((byte *) *data);
-    *data += sizeof(byte);
-
-    return p;
-}
-
-char
-read_char(byte **data)
-{
-    char p = *((char *) *data);
-    *data += sizeof(char);
-
-    return p;
-}
-
-int
-read_int(byte **data)
-{
-    int p = *((int *) *data);
-    *data += sizeof(int);
-
-    return p;
-}
-
-uchar
-read_uchar(byte **data)
-{
-    uchar p = *((uchar *) *data);
-    *data += sizeof(uchar);
-
-    return p;
-}
-
 uint
 read_uint(byte **data)
 {
     uint p = *((uint *) *data);
     *data += sizeof(uint);
-
-    return p;
-}
-
-float
-read_float(byte **data)
-{
-    float p = *((float *) *data);
-    *data += sizeof(float);
 
     return p;
 }
@@ -380,16 +291,6 @@ read_string(byte **data, uint len)
     *data += len * sizeof(char);
 
     return str;
-}
-
-void
-read_array(byte **data, void *dest, size_t nitems, size_t size)
-{
-    uint len;
-
-    len = nitems * size;
-    memcpy(dest, data, len);
-    *data += len;
 }
 
 void
@@ -485,6 +386,8 @@ write_segment(FileData *data, Segment *seg)
 void
 write_pack(FileData *data, Package *pack)
 {
+    World *world;
+    
     write_uint(data, pack->type);
     write_uint(data, pack->x);
     write_uint(data, pack->y);
@@ -510,31 +413,16 @@ write_pack(FileData *data, Package *pack)
 
     if (pack->circuit) {
         write_uint(data, TAG_CIRCUIT);
-        write_circuit(data, pack->circuit);
+
+        world = worldcreatefake();
+        worldbuild(world, pack->circuit);
+        write_body(data, world);
+        worlddeletefake(world);
     } else {
         write_uint(data, TAG_NULL);
     }
 }
 
-void
-write_pin(FileData *data, Pin *pin)
-{
-    write_uint(data, pin->x);
-    write_uint(data, pin->y);
-    write_uint(data, pin->state);
-    write_string(data, strlen(pin->name), pin->name);
-}
-
-void
-write_circuit(FileData *data, Circuit *circuit)
-{
-    World *world;
-
-    world = worldcreatefake();
-    worldbuild(world, circuit);
-    write_body(data, world);
-    worlddeletefake(world);
-}
 
 void
 write_memory(FileData *data, Memory *memory)
@@ -544,40 +432,15 @@ write_memory(FileData *data, Memory *memory)
 }
 
 void
-write_bool(FileData *data, int val)
-{
-    char x = val != 0;
-    filedata_push(data, &x, sizeof(char));
-}
-
-void
 write_char(FileData *data, char val)
 {
     filedata_push(data, &val, sizeof(char));
 }
 
 void
-write_int(FileData *data, int val)
-{
-    filedata_push(data, &val, sizeof(int));
-}
-
-void
-write_uchar(FileData *data, uchar val)
-{
-    filedata_push(data, &val, sizeof(uchar));
-}
-
-void
 write_uint(FileData *data, uint val)
 {
     filedata_push(data, &val, sizeof(uint));
-}
-
-void
-write_float(FileData *data, float val)
-{
-    filedata_push(data, &val, sizeof(float));
 }
 
 void
@@ -589,20 +452,6 @@ write_string(FileData *data, uint len, char *str)
 
     for (i = 0; i < len; i++) {
         write_char(data, str[i]);
-    }
-}
-
-void
-write_array(FileData *data, void *src, size_t nitems, size_t size)
-{
-    uint i;
-    byte *src_bytes;
-
-    src_bytes = src;
-
-    for (i = 0; i < nitems; i++) {
-        filedata_push(data, src_bytes, size);
-        src_bytes += size;
     }
 }
 
