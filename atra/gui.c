@@ -87,6 +87,7 @@ guielemcreate(float x, float y, float w, float h,
         int type, int attr, const char *id)
 {
     GUIElement *elem = calloc(1, sizeof(GUIElement));
+    char *key;
 
     if (checkmalloc(elem) < 0) {
         logprint(LOG_ERROR, "gui: Unable to create element:"\
@@ -100,14 +101,7 @@ guielemcreate(float x, float y, float w, float h,
     guisetattrtemplate(elem, type, attr);
 
     if (id) {
-        size_t idsize = strlen(id) + 1;
-        char *key = malloc(sizeof(char) * idsize);
-        
-        if (checkmalloc(key) < 0) {
-            logprint(LOG_ERROR, "gui: Unable to allocate memory for key");
-            return elem;
-        }
-        memcpy(key, id, idsize);
+        key = strdup(id);
         htableadd(elemtable, key, elem);
     }
     listpushback(elemlist, elem);
@@ -1440,13 +1434,12 @@ void
 guideleteelem(GUIElement *elem, int cascade)
 {
     uint i;
-    List *children = elem->children;
     GUITextGrid *grid = elem->textgrid;
     GUIElement *elem_tmp;
 
     if (cascade) {
-        for (i = 0; i < children->size; i++) {
-            guideleteelem(listat(children, i), 1);
+        for (i = 0; i < elem->children->size; i++) {
+            guideleteelem(listat(elem->children, i), 1);
         }
     }
 
@@ -1477,8 +1470,9 @@ guideleteelem(GUIElement *elem, int cascade)
         listdelete(grid->glyphs);
         free(grid->text);
         free(grid->view);
+        free(grid);
     }
-    listdelete(children);
+    listdelete(elem->children);
     free(elem);
 }
 
@@ -1501,7 +1495,7 @@ guishutdown(void)
 {
     uint i;
     GUILayer *layer;
-    
+
     for (i = 0; i < layerstack->size; i++) {
         layer = listat(layerstack, i);
         
@@ -1512,6 +1506,7 @@ guishutdown(void)
     }
     listdelete(elemlist);
     listdelete(layerstack);
+    htabledeallockeys(elemtable);
     htabledelete(elemtable);
     elemlist = NULL;
     layerstack = NULL;

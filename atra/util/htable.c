@@ -205,6 +205,7 @@ htableremove(HTable *table, const void *key)
         if (!keys[i])
             return;
         if (table->equal(key, keys[i])) {
+            free(keys[i]);
             keys[i] = NULL;
             vals[i] = NULL;
             table->occupied--;
@@ -312,7 +313,7 @@ htablestringhash(const void *str)
     int c;
     const uchar *pstr = str;
 
-    for (c = *pstr++; c; c = *pstr++) {
+    for (c = *pstr; c != '\0'; c = *(++pstr)) {
         hash = c + (hash << 6) + (hash << 16) - hash;
     }
 

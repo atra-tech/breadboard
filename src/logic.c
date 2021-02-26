@@ -62,7 +62,7 @@ wirebuild(World *world, uint x, uint y, uint layer)
     List *agenda;
     Tile *tile, *tileadj;
     TileData t_data;
-    int *coord;
+    int *coord, d_coord[2];
     uint i, found;
 
     wire = wirecreate();
@@ -88,8 +88,8 @@ wirebuild(World *world, uint x, uint y, uint layer)
         t_data.y = coord[1];
         t_data.state = tile->state;
         dlistpush(&wire->tile_data, &t_data);
-
         htableadd(wire->tiles, coord, tile);
+
         x = coord[0];
         y = coord[1];
         found = 0;
@@ -109,11 +109,13 @@ wirebuild(World *world, uint x, uint y, uint layer)
             tileadj = worldgettileat(world, x, y + 1, layer);
 
             if (tileadj->state & TILE_BOT) {
-                coord = malloc(2 * sizeof(int));
-                coord[0] = x;
-                coord[1] = y + 1;
-
-                if (!htableget(wire->tiles, coord)) {
+                d_coord[0] = x;
+                d_coord[1] = y + 1;
+        
+                if (!htableget(wire->tiles, d_coord)) {
+                    coord = malloc(2 * sizeof(int));
+                    coord[0] = d_coord[0];
+                    coord[1] = d_coord[1];
                     listpushback(agenda, coord);
                 }
             }
@@ -122,11 +124,13 @@ wirebuild(World *world, uint x, uint y, uint layer)
             tileadj = worldgettileat(world, x, y - 1, layer);
 
             if (tileadj->state & TILE_TOP) {
-                coord = malloc(2 * sizeof(int));
-                coord[0] = x;
-                coord[1] = y - 1;
+                d_coord[0] = x;
+                d_coord[1] = y - 1;
 
-                if (!htableget(wire->tiles, coord)) {
+                if (!htableget(wire->tiles, d_coord)) {
+                    coord = malloc(2 * sizeof(int));
+                    coord[0] = d_coord[0];
+                    coord[1] = d_coord[1];
                     listpushback(agenda, coord);
                 }
             }
@@ -135,11 +139,13 @@ wirebuild(World *world, uint x, uint y, uint layer)
             tileadj = worldgettileat(world, x - 1, y, layer);
 
             if (tileadj->state & TILE_RIGHT) {
-                coord = malloc(2 * sizeof(int));
-                coord[0] = x - 1;
-                coord[1] = y;
+                d_coord[0] = x - 1;
+                d_coord[1] = y;
 
-                if (!htableget(wire->tiles, coord)) {
+                if (!htableget(wire->tiles, d_coord)) {
+                    coord = malloc(2 * sizeof(int));
+                    coord[0] = d_coord[0];
+                    coord[1] = d_coord[1];
                     listpushback(agenda, coord);
                 }
             }
@@ -148,11 +154,13 @@ wirebuild(World *world, uint x, uint y, uint layer)
             tileadj = worldgettileat(world, x + 1, y, layer);
 
             if (tileadj->state & TILE_LEFT) {
-                coord = malloc(2 * sizeof(int));
-                coord[0] = x + 1;
-                coord[1] = y;
+                d_coord[0] = x + 1;
+                d_coord[1] = y;
 
-                if (!htableget(wire->tiles, coord)) {
+                if (!htableget(wire->tiles, d_coord)) {
+                    coord = malloc(2 * sizeof(int));
+                    coord[0] = d_coord[0];
+                    coord[1] = d_coord[1];
                     listpushback(agenda, coord);
                 }
             }
@@ -313,11 +321,15 @@ packdelete(Package *pack)
     for (i = 0; i < pack->in_pins.size; i++) {
         pindelete(dlistat(&pack->in_pins, i));
     }
+    dlistdelete(&pack->in_pins);
 
     for (i = 0; i < pack->out_pins.size; i++) {
         pindelete(dlistat(&pack->out_pins, i));
     }
+    dlistdelete(&pack->out_pins);
+
     free(pack->name);
+    free(pack);
 }
 
 Package *
@@ -350,7 +362,7 @@ packcopy(Package *src)
     if (src->circuit) {
         world = worldcreatefake();
         worldbuild(world, src->circuit);
-        dest->circuit = circuitbuild(world, 1);
+        dest->circuit = circuitbuild(world, 1, 1);
         packbindcircuit(dest, dest->circuit);
         worlddeletefake(world);
     }
@@ -544,7 +556,7 @@ packbindcircuit(Package *pack, Circuit *circuit)
 
 /* Build a logical circuit from a world-space circuit */
 Circuit *
-circuitbuild(World *world, int sub)
+circuitbuild(World *world, int sub, int clearsrc)
 {
     uint x, y, l, s, p, n;
     Circuit *circuit;
@@ -602,41 +614,49 @@ circuitbuild(World *world, int sub)
     /* Connect input pins to existing wires */
     for (s = 0; s < SEGMENT_COUNT; s++) {
         seg = world->segs[s];
-        
-        if (seg->packs->size == 0) {
-            continue;
-        } else {
-            for (p = 0; p < seg->packs->size; p++) {
-                pack = listat(seg->packs, p);
 
-                for (n = 0; n < pack->in_pins.size; n++) {
-                    pin = dlistat(&pack->in_pins, n);
-                    x = seg->x * SEGMENT_SIZE + pack->x + pin->x;
-                    y = seg->y * SEGMENT_SIZE + pack->y + pin->y;
+        for (p = 0; p < seg->packs->size; p++) {
+            pack = listat(seg->packs, p);
 
-                    for (l = 0; l < LAYER_TOTAL; l++) {
-                        tile = worldgettileat(world, x, y, l);
-                        wire = circuitgetwireat(circuit, x, y, l);
+            for (n = 0; n < pack->in_pins.size; n++) {
+                pin = dlistat(&pack->in_pins, n);
+                x = seg->x * SEGMENT_SIZE + pack->x + pin->x;
+                y = seg->y * SEGMENT_SIZE + pack->y + pin->y;
 
-                        if (tile->state & TILE_RIGHT && wire) {
-                            listpushback(pin->ins, wire);
-                            listpushback(wire->outs, pin);
-                        }
+                for (l = 0; l < LAYER_TOTAL; l++) {
+                    tile = worldgettileat(world, x, y, l);
+                    wire = circuitgetwireat(circuit, x, y, l);
+
+                    if (tile->state & TILE_RIGHT && wire) {
+                        listpushback(pin->ins, wire);
+                        listpushback(wire->outs, pin);
                     }
                 }
             }
+            if (clearsrc) {
+                listremove(seg->packs, p--);
+            }
         }
     }
-    
+
     return circuit;
 }
 
 void
 circuitdelete(Circuit *circuit)
 {
-    circuitclear(circuit);
+    uint i;
+
+    for (i = 0; i < circuit->wires->size; i++) {
+        wiredelete(listat(circuit->wires, i));
+    }
     listdelete(circuit->wires);
+
+    for (i = 0; i < circuit->packs->size; i++) {
+        packdelete(listat(circuit->packs, i));
+    }
     listdelete(circuit->packs);
+
     free(circuit);
 }
 
@@ -666,6 +686,8 @@ circuitgetwireat(Circuit *circuit, uint x, uint y, uint layer)
     return NULL;
 }
 
+/* Clear the circuit of wires in preparation for rebuild.
+ * Used specifically for a world's paired circuit, leaving packs intact. */
 void
 circuitclear(Circuit *circuit)
 {
@@ -676,7 +698,7 @@ circuitclear(Circuit *circuit)
     for (i = 0; i < circuit->wires->size; i++) {
         wiredelete(listat(circuit->wires, i));
     }
-    listclear(circuit->wires);
+    listdelete(circuit->wires);
 
     for (i = 0; i < circuit->packs->size; i++) {
         pack = listat(circuit->packs, i);
@@ -691,7 +713,9 @@ circuitclear(Circuit *circuit)
             listclear(pin->outs);
         }
     }
-    listclear(circuit->packs);
+    listdelete(circuit->packs);
+
+    free(circuit);
 }
 
 void
@@ -756,15 +780,10 @@ circuitupdatefull(Circuit *circuit, float dt)
     for (i = 0; i < circuit->wires->size; i++) {
         wire = listat(circuit->wires, i);
         wireupdate(wire);
-        //wire->changed = 1;
     }
 
     for (i = 0; i < circuit->packs->size; i++) {
         pack = listat(circuit->packs, i);
-
-        /*if (pack->circuit) {
-            circuitupdatefull(pack->circuit, dt);
-        }*/
         pack->changed = 1;
     }
 
@@ -776,7 +795,7 @@ circuitrebuild(struct World *world, Circuit **circuit)
 {
     schedulesegremeshing(*circuit);
     circuitclear(*circuit);
-    *circuit = circuitbuild(world, 0);
+    *circuit = circuitbuild(world, 0, 0);
     circuitclearerrors(*circuit);
     circuitupdatefull(*circuit, 0.0f);
 }

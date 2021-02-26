@@ -1599,7 +1599,7 @@ ui_packsave_save_mousedown(GUIElement *elem, ...)
         ui_filelist_populate();
 
         /* Build package as mouseseg */
-        circuit = circuitbuild(world, 1);
+        circuit = circuitbuild(world, 1, 1);
         pack = packcreate(PACK_CIRCUIT, target_path);
         pack->name = strdup(fname); 
         packbindcircuit(pack, circuit);
@@ -1609,7 +1609,6 @@ ui_packsave_save_mousedown(GUIElement *elem, ...)
         freesegmesh(seg);
         setmouseseg(seg);
         selbox->enabled = 0;
-
         worlddeletefake(world);
     } else {
         ui_dialogbox_settext("Unable to create package. Please make a "
@@ -1906,11 +1905,12 @@ ui_filelist_clear(void)
     for (i = 0; i < files.paths->size; i++) {
         guideleteelem(listat(files.file_elems, i), 1);
         guideleteelem(listat(files.pack_elems, i), 1);
-        listdealloc(files.paths);
-        listclear(files.file_elems);
-        listclear(files.pack_elems);
-        listclear(files.paths);
     }
+    listclear(files.file_elems);
+    listclear(files.pack_elems);
+    listdealloc(files.paths);
+    listclear(files.paths);
+
     guisignalinterrupt(guigetelem("ui_fileload_filelist"));
     guisignalinterrupt(guigetelem("ui_packload_filelist"));
 }
@@ -1973,7 +1973,7 @@ ui_filelist_openpack(uint index)
     filegetworld(target_path, world);
 
     /* Build package as mouseseg */
-    circuit = circuitbuild(world, 1);
+    circuit = circuitbuild(world, 1, 1);
     pack = packcreate(PACK_CIRCUIT, target_path);
     pack->name = strdup(fname); 
     packbindcircuit(pack, circuit);
@@ -1983,7 +1983,6 @@ ui_filelist_openpack(uint index)
     freesegmesh(seg);
     setmouseseg(seg);
     selbox->enabled = 0;
-    
     worlddeletefake(world);
 }
 
@@ -2161,7 +2160,7 @@ ui_confirmbox_packsave_overwrite_save(GUIElement *elem, ...)
     ui_filelist_populate();
 
     /* Build package as mouseseg */
-    circuit = circuitbuild(world, 1);
+    circuit = circuitbuild(world, 1, 1);
     pack = packcreate(PACK_CIRCUIT, target_path);
     pack->name = strdup(fname);
     packbindcircuit(pack, circuit);

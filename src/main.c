@@ -18,7 +18,6 @@ int
 main(int argc, char **argv)
 {
     Window *window;
-    int running = 1;
     float dt;
 
     UNUSED(argc);
@@ -30,7 +29,7 @@ main(int argc, char **argv)
     simstateinit();
     simstatestart();
     
-    while (running) {
+    while (1) {
         timerglobalupdate();
         dt = timerglobaldiff() * 0.001;
         

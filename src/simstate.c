@@ -61,6 +61,7 @@ simstatestop(void)
                 "State not at top of stack");
         die("Fatal engine state stack error: Bad order");
     }
+    ui_shutdown();
     worldshutdown();
     atrapopstate();
 }
@@ -80,7 +81,6 @@ simhandle(void)
     while (SDL_PollEvent(&e)) {
         if (e.type == SDL_QUIT) {
             simstatestop();
-            //stopatraengine();
             exit(EXIT_SUCCESS);
         }
 

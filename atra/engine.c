@@ -10,6 +10,7 @@
  *  */
 
 #include "engine.h"
+#include "core.h"
 #include "util/util.h"
 #include "util/log.h"
 #include "util/stack.h"
@@ -118,6 +119,7 @@ atrashutdown(void)
     }
     logprint(LOG_INFO, "Shutting down...");
     statestop();
+    stopatraengine();
     IMG_Quit();
     SDL_Quit();
 }

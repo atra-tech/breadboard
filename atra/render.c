@@ -462,28 +462,28 @@ texbind(Texture *tex)
 void
 texfind(Texture *tex, const char *path)
 {
-    int len;
-    char *name = strrchr(path, '/');
+    const char *name;
     char *texname;
     Texture *texentry;
+    
+    name = strrchr(path, '/');
 
-    if (!name) {
-        name = (char *)path;
+    if (name) {
+        name++;         /* Skip '/' character */
+    } else {
+        name = path;    /* Use whole path */
     }
-    name++;
     texentry = htableget(textures, name);
 
     if (texentry) {
         *tex = *texentry;
-        return;
+    } else {
+        texentry = malloc(sizeof(Texture));
+        texname = strdup(name);
+        texload(texentry, path);
+        htableadd(textures, texname, texentry);
+        *tex = *texentry;
     }
-    len = strlen(name);
-    texentry = malloc(sizeof(Texture));
-    texname = calloc(len + 1, sizeof(char));
-    memcpy(texname, name, len);
-    texload(texentry, path);
-    htableadd(textures, texname, texentry);
-    *tex = *texentry;
 }
 
 void
@@ -609,28 +609,28 @@ fontload(FontTex *font, const char *path, int width, int height)
 void
 fontfind(FontTex *font, const char *path, int width, int height)
 {
-    int len;
-    char *name = strrchr(path, '/');
+    const char *name;
     char *fontname;
     FontTex *fontentry;
+    
+    name = strrchr(path, '/');
 
-    if (!name) {
-        name = (char *)path;
+    if (name) {
+        name++;         /* Skip '/' character */
+    } else {
+        name = path;    /* Use whole path */
     }
-    name++;
     fontentry = htableget(fonts, name);
     
     if (fontentry) {
         *font = *fontentry;
-        return;
+    } else {
+        fontentry = malloc(sizeof(FontTex));
+        fontname = strdup(name);
+        fontload(fontentry, path, width, height);
+        htableadd(fonts, fontname, fontentry);
+        *font = *fontentry;
     }
-    len = strlen(name);
-    fontentry = malloc(sizeof(FontTex));
-    fontname = malloc(sizeof(char) * len);
-    memcpy(fontname, name, len);
-    fontload(fontentry, path, width, height);
-    htableadd(fonts, fontname, fontentry);
-    *font = *fontentry;
 }
 
 void

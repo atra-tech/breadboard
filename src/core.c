@@ -53,7 +53,6 @@ stopatraengine(void)
     texquit();
     contextdelete(&context);
     windowdelete(&window);
-    atrashutdown();
     logstop();
 }
 

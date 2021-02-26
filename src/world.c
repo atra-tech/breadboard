@@ -167,6 +167,7 @@ worldstart(void)
     wireorder[1] = WIRE_GREEN;
     wireorder[2] = WIRE_BLUE;
     mouseseg = NULL;
+    clipboardseg = NULL;
 
     /* Populate circuit package texture UVs */
     for (i = 0; i < 3; i++) {
@@ -207,6 +208,10 @@ worldshutdown(void)
         freesegdelete(mouseseg);
     }
 
+    if (clipboardseg) {
+        freesegdelete(clipboardseg);
+    }
+
     while (worldstack->size) {
         worlddelete(stacktop(worldstack));
         stackpop(worldstack);
@@ -241,7 +246,7 @@ worldcreate(void)
             world->segs[i * SEGMENTS_PER_ROW + j] = seg;
         }
     }
-    world->circuit = circuitbuild(world, 0);
+    world->circuit = circuitbuild(world, 0, 0);
     world->name = NULL;
 
     return world;
@@ -268,11 +273,10 @@ worldcreatefake(void)
             world->segs[i * SEGMENTS_PER_ROW + j] = seg;
         }
     }
-    world->circuit = circuitbuild(world, 0);
+    world->circuit = NULL;
     world->name = NULL;
 
     return world;
-
 }
 
 void
@@ -423,7 +427,6 @@ void
 freesegdelete(FreeSegment *seg)
 {
     uint i;
-    Package *pack;
 
     vbufdelete(&seg->wirevbo);
     vbufdelete(&seg->textvbo);
@@ -431,8 +434,7 @@ freesegdelete(FreeSegment *seg)
     veclistdelete(&seg->textcolors);
 
     for (i = 0; i < seg->packs->size; i++) {
-        pack = listat(seg->packs, i);
-        packdelete(pack);
+        packdelete(listat(seg->packs, i));
     }
     listdelete(seg->packs);
 

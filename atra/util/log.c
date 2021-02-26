@@ -16,7 +16,7 @@
 #include "log.h"
 #include "util.h"
 
-typedef struct {
+typedef struct Log {
     char **ents;
     int *modes;
     int size;
@@ -30,8 +30,8 @@ loginit()
 {
     int i;
 
-    log.ents = (char**)malloc(LOG_DEFAULT_SIZE * sizeof(char*));
-    log.modes = (int*)malloc(LOG_DEFAULT_SIZE * sizeof(int));
+    log.ents = malloc(LOG_DEFAULT_SIZE * sizeof(char*));
+    log.modes = malloc(LOG_DEFAULT_SIZE * sizeof(int));
 
     if(checkmalloc(log.ents) < 0)
         return -1;
@@ -40,7 +40,7 @@ loginit()
         return -1;
 
     for (i = 0; i < LOG_DEFAULT_SIZE; i++) {
-        log.ents[i] = (char*)malloc(LOG_MAX_ENTRY_SIZE * sizeof(char));
+        log.ents[i] = malloc(LOG_MAX_ENTRY_SIZE * sizeof(char));
         if (checkmalloc(log.ents[i]) < 0)
             return -1;
         memset(log.ents[i], 0, LOG_MAX_ENTRY_SIZE * sizeof(char));

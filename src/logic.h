@@ -119,7 +119,7 @@ void wiredelete(Wire *);
 Wire * wirebuild(struct World *world, uint x, uint y, uint layer);
 uint wireupdate(Wire *wire);
 
-Circuit * circuitbuild(struct World *world, int sub);
+Circuit * circuitbuild(struct World *world, int sub, int clearsrc);
 void circuitdelete(Circuit *circuit);
 Wire * circuitgetwireat(Circuit *circuit, uint x, uint y, uint layer);
 void circuitclear(Circuit *circuit);

@@ -241,6 +241,10 @@ read_pack(byte **data)
     } else {
         pack->path = NULL;
     }
+
+    if (pack->name) {
+        free(pack->name);
+    }
     pack->name = read_string(data, read_uint(data));
 
     /* Load memory, if it exists. */
@@ -256,7 +260,7 @@ read_pack(byte **data)
     if (tag == TAG_CIRCUIT) {
         world = worldcreatefake();
         read_body(data, world);
-        circuit = circuitbuild(world, 1);
+        circuit = circuitbuild(world, 1, 1);
         packbindcircuit(pack, circuit);
         worlddeletefake(world);
     } else {
@@ -290,7 +294,7 @@ read_circuit(byte **data)
 
     world = worldcreatefake();
     read_body(data, world);
-    circuit = circuitbuild(world, 1);
+    circuit = circuitbuild(world, 1, 1);
     worlddeletefake(world);
 
     return circuit;

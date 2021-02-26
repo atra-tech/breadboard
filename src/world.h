@@ -109,7 +109,7 @@ typedef struct FreeSegment {
     VBuffer wirevbo, textvbo;
     VecList colors, textcolors;
     mat4 modelmat;
-    Tile *tiles[LAYER_TOTAL];   //Size based on layer dimensions
+    Tile *tiles[LAYER_TOTAL];
     List *packs;
 } FreeSegment;
 
