@@ -17,11 +17,11 @@
 #include "state.h"
 #include "opengl.h"
 
-#define ENGINE_VERSION "ALPHA 0.1.3"
+#define ENGINE_VERSION "ALPHA 0.1.4"
 
 void atrainit(const char* title, int width, int height, Window *, Context *);
 void atrapushstate(State *state);
-void atrapopstate(void);
+void atrapopstate(int enginestop);
 void atrastatehandle(void);
 void atrastateupdate(float dt);
 void atrastaterender(void);

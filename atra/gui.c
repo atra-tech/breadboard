@@ -20,6 +20,8 @@
 #include "input.h"
 #include "entity.h"
 
+#include <string.h>
+
 #define LERP(a, b, t) (1.0f - t) * a + b * t
 #define CLAMP(v, l, h) (v < l) ? l : ((v > h) ? h : v)
 
@@ -231,6 +233,10 @@ guihideelem(GUIElement *elem)
     uint i;
 
     BIT_SET(elem->state, GUI_STATE_INVISIBLE);
+
+    if (elem == kbdfocus) {
+        kbdfocus = NULL;
+    }
 
     for (i = 0; i < elem->children->size; i++) {
         guihideelem(listat(elem->children, i));
@@ -1577,7 +1583,6 @@ guiscrollbaradd(GUIScrollBar *bar, GUIElement *parent)
 void
 guisetgridtext(GUIElement *elem, const char *text)
 {
-    size_t len;
     char *textcpy;
     GUITextGrid *grid = elem->textgrid;
 
@@ -1585,13 +1590,9 @@ guisetgridtext(GUIElement *elem, const char *text)
         free(grid->text);
     }
 
-    len = strlen(text) + 1;
-    textcpy = malloc(len * sizeof(char));
-    strncpy(textcpy, text, len);
+    textcpy = strdup(text);
     grid->text = textcpy;
-    //grid->dirty = 1;
     grid->textset = 1;
-    //elem->layer->dirty = 1;
 }
 
 void

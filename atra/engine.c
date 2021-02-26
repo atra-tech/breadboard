@@ -10,7 +10,7 @@
  *  */
 
 #include "engine.h"
-#include "core.h"
+//#include "core.h"
 #include "util/util.h"
 #include "util/log.h"
 #include "util/stack.h"
@@ -66,7 +66,7 @@ atrapushstate(State *state)
 }
 
 void
-atrapopstate(void)
+atrapopstate(int enginestop)
 {
     if (!init) {
         logprint(LOG_ERROR, "atra: Unable to pop state: " \
@@ -75,7 +75,7 @@ atrapopstate(void)
     }
     statepop();
 
-    if (stateempty())
+    if (stateempty() && enginestop)
         atrashutdown();
 }
 
@@ -119,7 +119,6 @@ atrashutdown(void)
     }
     logprint(LOG_INFO, "Shutting down...");
     statestop();
-    stopatraengine();
     IMG_Quit();
     SDL_Quit();
 }

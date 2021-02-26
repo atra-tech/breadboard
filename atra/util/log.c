@@ -223,6 +223,5 @@ logstop()
         log.modes = NULL;
     } else {
        logprint(LOG_ERROR, "log: Attempted to terminate uninitialised log");
-       logstop();
     }
 }
