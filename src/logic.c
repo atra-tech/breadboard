@@ -401,6 +401,10 @@ packupdate(Package *pack, float dt)
             pin = dlistat(&pack->out_pins, i);
             pingetsig(pin);
         }
+
+        if (pack->circuit->error) {
+            pack->error = 1;
+        }
         break;
     default:
         pack->func(pack);
@@ -550,7 +554,7 @@ packbindcircuit(Package *pack, Circuit *circuit)
     }
     listdelete(in_nodes);
     listdelete(out_nodes);
-
+    
     pack->circuit = circuit;
 }
 
@@ -566,7 +570,7 @@ circuitbuild(World *world, int sub, int clearsrc)
     Pin *pin;
     Tile *tile;
 
-    circuit = malloc(sizeof(Circuit));
+    circuit = calloc(1, sizeof(Circuit));
     circuit->wires = listcreate();
     circuit->packs = listcreate();
     circuit->error = 0;
@@ -600,9 +604,14 @@ circuitbuild(World *world, int sub, int clearsrc)
                                 wire = wirebuild(world, x, y, l);
                                 listpushback(circuit->wires, wire);
                             }
+                            
+                            if (tile->state & TILE_POWERED) {
+                                wire->active = 1;
+                            }
                             wire->sub = sub;
                             listpushback(pin->outs, wire);
                             listpushback(wire->ins, pin);
+                            
                         }
                     }
                 }
@@ -628,16 +637,23 @@ circuitbuild(World *world, int sub, int clearsrc)
                     wire = circuitgetwireat(circuit, x, y, l);
 
                     if (tile->state & TILE_RIGHT && wire) {
+                        pin->state = wire->active || pin->state;
                         listpushback(pin->ins, wire);
                         listpushback(wire->outs, pin);
                     }
                 }
             }
             if (clearsrc) {
+                pack->seg = NULL;
                 listremove(seg->packs, p--);
             }
         }
     }
+
+    if (world->circuit && clearsrc) {
+        listclear(world->circuit->packs);
+    }
+    circuitupdate(circuit, 0.0f);
 
     return circuit;
 }

@@ -1831,10 +1831,13 @@ freesegmerge(FreeSegment *seg, int x, int y)
     uint tile;
     Package *pack, *tmppack;
     Segment *tmpseg;
+    List *pack_agenda;
+
+    pack_agenda = listcreate();
 
     /* Check bounds violations */
-    if (x < 0 || x + seg->w >= SEGMENTS_PER_ROW * SEGMENT_SIZE ||
-        y < 0 || y + seg->h >= SEGMENTS_PER_ROW * SEGMENT_SIZE) {
+    if (x < 0 || x + seg->w >= WORLD_SIZE ||
+        y < 0 || y + seg->h >= WORLD_SIZE) {
         return 0;
     }
 
@@ -1842,10 +1845,8 @@ freesegmerge(FreeSegment *seg, int x, int y)
     for (l = 0; l < seg->packs->size; l++) {
         pack = listat(seg->packs, l);
 
-        for (i = (x + pack->x) / SEGMENT_SIZE;
-                i <= (x + pack->x + pack->w) / SEGMENT_SIZE; i++) {
-            for (j = (y + pack->y) / SEGMENT_SIZE;
-                    j <= (y + pack->y + pack->h) / SEGMENT_SIZE; j++) {
+        for (i = 0; i <= (x + pack->x + pack->w) / SEGMENT_SIZE; i++) {
+            for (j = 0; j <= (y + pack->y + pack->h) / SEGMENT_SIZE; j++) {
                 tmpseg = worldgetsegment(mainworld, i, j);
 
                 for (k = 0; k < tmpseg->packs->size; k++) {
@@ -1889,6 +1890,7 @@ freesegmerge(FreeSegment *seg, int x, int y)
         listremove(seg->packs, 0);
         tmpseg->dirty = 1;
     }
+    listdelete(pack_agenda);
 
     return 1;
 }

@@ -34,7 +34,7 @@ loadfile(const char *path)
     int length = ftell(file);
     fseek(file, 0, SEEK_SET);
     char *data = malloc((length + 2) * sizeof(char));
-    fread(data, 1, length, file);
+    fread(data, sizeof(char), length, file);
     data[length + 0] = 0;
     data[length + 1] = EOF;
     fclose(file);
