@@ -2064,8 +2064,6 @@ static void guibuttonfilesavedown(GUIElement *elem, ...);
 static void guibuttonpackopendown(GUIElement *elem, ...);
 static void guibuttonpacksavedown(GUIElement *elem, ...);
 
-static void guidisablewirebuttons(void);
-
 enum gui_toolbar_buttons {
     BUTTON_NOT,
     BUTTON_OR,
@@ -2105,12 +2103,12 @@ enum gui_toolbar_buttons {
 #define PACKBAR_BTN_W   1.0f / PACKBAR_NBTNS
 #define PACKBAR_BTN_H   1.0f
 
-#define TOOLBAR_OFFSET_W  TOOLBAR_BTN_W * 0.01f; 
-#define TOOLBAR_OFFSET_H  TOOLBAR_BTN_H * 0.01f; 
-#define FILEBAR_OFFSET_W  FILEBAR_BTN_W * 0.01f; 
-#define FILEBAR_OFFSET_H  FILEBAR_BTN_H * 0.01f; 
-#define PACKBAR_OFFSET_W  PACKBAR_BTN_W * 0.01f; 
-#define PACKBAR_OFFSET_H  PACKBAR_BTN_H * 0.01f; 
+#define TOOLBAR_OFFSET_W  (TOOLBAR_BTN_W * 0.01f) 
+#define TOOLBAR_OFFSET_H  (TOOLBAR_BTN_H * 0.01f) 
+#define FILEBAR_OFFSET_W  (FILEBAR_BTN_W * 0.01f) 
+#define FILEBAR_OFFSET_H  (FILEBAR_BTN_H * 0.01f) 
+#define PACKBAR_OFFSET_W  (PACKBAR_BTN_W * 0.01f) 
+#define PACKBAR_OFFSET_H  (PACKBAR_BTN_H * 0.01f) 
 
 const char *toolbarnames[] = {
     "toolbar_not",
@@ -2468,6 +2466,12 @@ guibuttonbluedown(GUIElement *elem, ...)
     elem->layer->dirty = 1;
 }
 
+int
+mouseisfree(void)
+{
+    return (mousemode == MOUSE_NONE);
+}
+
 void
 guidisablewirebuttons(void)
 {
@@ -2662,21 +2666,30 @@ guifilebarcreate(void)
             "filebar_base_right");
 
     new = guielemcreate(
-            FILEBAR_BTN_W * 0, 0.0f, FILEBAR_BTN_W, 1.0f,
+            FILEBAR_BTN_W * 0 + FILEBAR_OFFSET_W,
+            FILEBAR_OFFSET_H,
+            FILEBAR_BTN_W - FILEBAR_OFFSET_W * 2.0f,
+            1.0f - FILEBAR_OFFSET_H * 2.0f,
             GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE |
             GUI_ATTR_CLICKABLE,
             "filebar_new");
 
     open = guielemcreate(
-            FILEBAR_BTN_W * 1, 0.0f, FILEBAR_BTN_W, 1.0f,
+            FILEBAR_BTN_W * 1 + FILEBAR_OFFSET_W,
+            FILEBAR_OFFSET_H,
+            FILEBAR_BTN_W - FILEBAR_OFFSET_W * 2.0f,
+            1.0f - FILEBAR_OFFSET_H * 2.0f,
             GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE |
             GUI_ATTR_CLICKABLE,
             "filebar_open");
     
     save = guielemcreate(
-            FILEBAR_BTN_W * 2, 0.0f, FILEBAR_BTN_W, 1.0f,
+            FILEBAR_BTN_W * 2 + FILEBAR_OFFSET_W,
+            FILEBAR_OFFSET_H,
+            FILEBAR_BTN_W - FILEBAR_OFFSET_W * 2.0f,
+            1.0f - FILEBAR_OFFSET_H * 2.0f,
             GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE |
             GUI_ATTR_CLICKABLE,
@@ -2761,14 +2774,20 @@ guipackbarcreate(void)
             "packbar_base_left");
 
     open = guielemcreate(
-            PACKBAR_BTN_W * 0, 0.0f, PACKBAR_BTN_W, 1.0f,
+            PACKBAR_BTN_W * 0 + PACKBAR_OFFSET_W,
+            PACKBAR_OFFSET_H,
+            PACKBAR_BTN_W - PACKBAR_OFFSET_W * 2.0f,
+            1.0f - PACKBAR_OFFSET_H * 2.0f,
             GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE |
             GUI_ATTR_CLICKABLE,
             "packbar_open");
     
     save = guielemcreate(
-            PACKBAR_BTN_W * 1, 0.0f, PACKBAR_BTN_W, 1.0f,
+            PACKBAR_BTN_W * 1 + PACKBAR_OFFSET_W,
+            PACKBAR_OFFSET_H,
+            PACKBAR_BTN_W - PACKBAR_OFFSET_W * 2.0f,
+            1.0f - PACKBAR_OFFSET_H * 2.0f,
             GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE |
             GUI_ATTR_CLICKABLE,
@@ -2847,7 +2866,10 @@ guitoolbarcreate(void)
 
     for (i = 0; i < BUTTON_TOTAL; i++) {
         buttons[i] = guielemcreate(
-                TOOLBAR_BTN_W * i, 0.0f, TOOLBAR_BTN_W, 1.0f,
+                TOOLBAR_BTN_W * i + TOOLBAR_OFFSET_W,
+                TOOLBAR_OFFSET_H,
+                TOOLBAR_BTN_W - TOOLBAR_OFFSET_W * 2.0f,
+                1.0f - TOOLBAR_OFFSET_H * 2.0f,
                 GUI_CUSTOM,
                 GUI_ATTR_HASTEXTURE |
                 GUI_ATTR_CLICKABLE,

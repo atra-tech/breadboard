@@ -1634,6 +1634,8 @@ void
 ui_packload_entry_mousedown(GUIElement *elem, ...)
 {
     uint i;
+
+    guidisablewirebuttons();
     
     /* Spawn a new package as part of the mouse segment */
     for (i = 0; i < files.pack_elems->size; i++) {

@@ -165,6 +165,9 @@ int freesegisempty(FreeSegment *seg);
 SelectBox * selboxget(void);
 void setmouseseg(FreeSegment *seg);
 
+int mouseisfree(void);
+void guidisablewirebuttons(void);
+
 Segment * worldgetsegment(World *world, uint x, uint y);
 Segment * worldgetsegmentat(World *world, uint x, uint y);
 Layer * worldgetlayerat(World *world, uint x, uint y, uint layer);
