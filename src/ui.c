@@ -1634,8 +1634,14 @@ void
 ui_packload_entry_mousedown(GUIElement *elem, ...)
 {
     uint i;
+    uint mousemode = getmousemode();
 
     guidisablewirebuttons();
+
+    if (mousemode == MOUSE_DRAGBOX ||
+            mousemode == MOUSE_BOXREADY) {
+        selbox->enabled = 0;
+    }
     
     /* Spawn a new package as part of the mouse segment */
     for (i = 0; i < files.pack_elems->size; i++) {
