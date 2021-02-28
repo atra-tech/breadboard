@@ -225,6 +225,10 @@ ui_filesave_hide(void)
 void
 ui_fileload_show(void)
 {
+    files.select_enabled = 0;
+    files.select_index = 0;
+
+    ui_elem_hide("ui_packload_base");
     ui_elem_show("ui_fileload_base");
     ui_filelist_elems_calcpos();
 }

@@ -514,6 +514,10 @@ guimeshscrollbar(GUIElement *elem, float totalrows, float x_min, float y_min,
     float barsize, barpos, disttop;
     uint indexcount = vbo->indexcount - vbo->indexcount / 3;
 
+    if (grid->colcount == 0) {
+        logprint(LOG_ERROR, "gui: Unable to mesh scrollbar: Column size is 0");
+    }
+
     x_min = x_max + bar->x_offset;
     x_max += bar->width + bar->x_offset;
     y_min -= bar->h_extra;

@@ -152,7 +152,7 @@ worldstart(void)
             "res/shader/indicatorfrag.glsl");
     texfind(&bgtex, "res/texture/background.png");
     texfind(&circuittex, "res/texture/circuits.png");
-    fontfind(&fonttex, "res/font/maledict_12x12.png", 12, 12);
+    fontfind(&fonttex, "res/font/maledict_16x16.png", 16, 16);
 
     circuittex.imagesize = 1024;
     circuittex.texsize = 64;
