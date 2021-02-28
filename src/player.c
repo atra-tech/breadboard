@@ -14,7 +14,7 @@
 #include "core.h"
 #include "util/log.h"
 
-#define PLAYER_SPEED    (1024.0f / camera->zoom)
+#define PLAYER_SPEED (1024.0f / camera->zoom)
 
 static Camera *camera;
 
@@ -44,6 +44,7 @@ playerhandle(Player *player, Event *e)
     } else {
         player->speed = PLAYER_SPEED;
     }
+
     if (keystate(KEYCODE(w)) || keystate(KEYCODE(UP))) {
         player->vel[1] = player->speed;
     }
@@ -61,7 +62,6 @@ playerhandle(Player *player, Event *e)
 void
 playerupdate(Player *player, float dt)
 {
-    //Camera *cam = getmaincamera();
     vec3 dt_vec = {dt, dt, dt};
     vec3 tform;
 
