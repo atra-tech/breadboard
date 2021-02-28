@@ -14,7 +14,7 @@ INC_DIRS := $(shell find $(SRC_DIRS) -type d)
 INC_FLAGS := $(addprefix -I,$(INC_DIRS))
 
 LDFLAGS ?= -lm -lSDL2 -lSDL2_image -lGL -lGLEW
-CPPFLAGS ?= $(INC_FLAGS) -MP -MMD -Og -Wall -Wextra -Wpedantic -g -std=c99
+CPPFLAGS ?= $(INC_FLAGS) -MP -MMD -O3 -Wall -Wextra -Wpedantic -g -std=c99
 
 $(BUILD_DIR)/$(TARGET_EXEC): $(OBJS)
 	$(CC) $(OBJS) -o $@ $(LDFLAGS)
