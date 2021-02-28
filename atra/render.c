@@ -28,13 +28,13 @@ vbufinit(VBuffer *vbo)
 {
     vbo->vao = 0;
     vbo->vbocount = 0;
-    vbo->indxcount = 0;
+    vbo->indexcount = 0;
 
     iveclistinit(&vbo->buffers, 1);
     veclistinit(&vbo->verts, 3);
     veclistinit(&vbo->uvs, 2);
     veclistinit(&vbo->norms, 3);
-    iveclistinit(&vbo->indxs, 3);
+    iveclistinit(&vbo->indexes, 3);
 }
 
 void
@@ -48,7 +48,8 @@ vbufaddvertex(VBuffer *vbo, vec3 vertex, vec2 uv, vec3 normal)
 void
 vbufaddindex(VBuffer *vbo, ivec3 index)
 {
-    iveclistpush(&vbo->indxs, index);
+    iveclistpush(&vbo->indexes, index);
+    vbo->indexcount += 3;
 }
 
 void
@@ -58,8 +59,10 @@ vbufbindvbo(VBuffer *vbo, VecList *data)
 
     glGenBuffers(1, &buf);
     glBindBuffer(GL_ARRAY_BUFFER, buf);
-    glBufferData(GL_ARRAY_BUFFER, data->size * data->elemsize * sizeof(float),
-                 data->data, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER,
+            data->size * data->elemsize * sizeof(float),
+            data->data, 
+            GL_STATIC_DRAW);
     glVertexAttribPointer(vbo->vbocount, data->elemsize,
             GL_FLOAT, GL_FALSE, 0, NULL);
     glEnableVertexAttribArray(vbo->vbocount++);
@@ -75,8 +78,9 @@ vbufbindebo(VBuffer *vbo)
     glGenBuffers(1, &ebo);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER,
-            vbo->indxs.size * sizeof(int) * 3,
-            vbo->indxs.data, GL_STATIC_DRAW);
+            vbo->indexes.size * sizeof(int) * 3,
+            vbo->indexes.data, 
+            GL_STATIC_DRAW);
 
     iveclistpush(&vbo->buffers, (int *)&ebo);
 }
@@ -107,9 +111,9 @@ vbufclear(VBuffer *vbo)
     veclistclear(&vbo->verts);
     veclistclear(&vbo->uvs);
     veclistclear(&vbo->norms);
-    iveclistclear(&vbo->indxs);
+    iveclistclear(&vbo->indexes);
 
-    vbo->indxcount = 0;
+    vbo->indexcount = 0;
 }
 
 void
@@ -126,19 +130,13 @@ vbufreset(VBuffer *vbo)
     veclistclear(&vbo->verts);
     veclistclear(&vbo->uvs);
     veclistclear(&vbo->norms);
-    iveclistclear(&vbo->indxs);
+    iveclistclear(&vbo->indexes);
 
     vbo->vao = 0;
     vbo->vbocount = 0;
-    vbo->indxcount = 0;
+    vbo->indexcount = 0;
 }
-/*
-void
-vbufresetnoclear(vbuf *vbo)
-{
 
-}
-*/
 void
 vbufdelete(VBuffer *vbo)
 {
@@ -153,11 +151,17 @@ vbufdelete(VBuffer *vbo)
     veclistdelete(&vbo->verts);
     veclistdelete(&vbo->uvs);
     veclistdelete(&vbo->norms);
-    iveclistdelete(&vbo->indxs);
+    iveclistdelete(&vbo->indexes);
 
     vbo->vao = 0;
     vbo->vbocount = 0;
-    vbo->indxcount = 0;
+    vbo->indexcount = 0;
+}
+
+void
+atra_drawtriangles(VBuffer *vbo)
+{
+    glDrawElements(GL_TRIANGLES, vbo->indexcount, GL_UNSIGNED_INT, NULL);
 }
 
 void
@@ -492,12 +496,12 @@ texget(Texture *tex, int x, int y, float *uvs)
     float texperrow = tex->imagesize / (float)tex->texsize;
     float texsize = 1.0f / texperrow;
     float pixsize = texsize / (float)tex->texsize;
-    float pixoffset = pixsize * 0.001f;
+    float offset = pixsize * 0.05f;
 
-    float xmin = x * texsize + pixoffset;
-    float ymin = y * texsize + pixoffset;
-    float xmax = (xmin + texsize) - (pixoffset * 2);
-    float ymax = (ymin + texsize) - (pixoffset * 2);
+    float xmin = x * texsize + offset;
+    float ymin = y * texsize + offset;
+    float xmax = (xmin + texsize) - (offset * 2);
+    float ymax = (ymin + texsize) - (offset * 2);
 
     uvs[0] = xmax; uvs[1] = ymax;
     uvs[2] = xmin; uvs[3] = ymax;
@@ -508,15 +512,15 @@ texget(Texture *tex, int x, int y, float *uvs)
 void
 texgetrect(Texture *tex, TextureRect *rect, float *uvs)
 {
-    float pixwidth = 1.0f / tex->width;
-    float pixheight = 1.0f / tex->height;
-    float pixoffset_x = pixwidth * 0.001f;
-    float pixoffset_y = pixheight * 0.001f;
+    const float pixwidth = 1.0f / tex->width;
+    const float pixheight = 1.0f / tex->height;
+    const float offset_x = pixwidth * 0.05f;
+    const float offset_y = pixheight * 0.05f;
 
-    float xmin = rect->x * pixwidth + pixoffset_x;
-    float ymin = rect->y * pixheight + pixoffset_y;
-    float xmax = (rect->x + rect->w) * pixwidth - pixoffset_x;
-    float ymax = (rect->y + rect->h) * pixheight - pixoffset_y;
+    const float xmin = rect->x * pixwidth + offset_x;
+    const float ymin = rect->y * pixheight + offset_y;
+    const float xmax = (rect->x + rect->w) * pixwidth - offset_x;
+    const float ymax = (rect->y + rect->h) * pixheight - offset_y;
 
     uvs[0] = xmax; uvs[1] = ymax;
     uvs[2] = xmin; uvs[3] = ymax;
@@ -646,18 +650,20 @@ fontcalctexcoords(FontTex *font, uchar charcount)
 void
 fontget(FontTex *font, const char chr, float *uvs)
 {
-    int texperrow = font->width / font->fontwidth;
-    int charpos_x = chr % texperrow;
-    int charpos_y = chr / texperrow;
-    int texwidth = charpos_x * font->fontwidth;
-    int texheight = charpos_y * font->fontheight;
-    float pixwidth = 1.0f / font->width;
-    float pixheight = 1.0f / font->height;
+    const int texperrow = font->width / font->fontwidth;
+    const int charpos_x = chr % texperrow;
+    const int charpos_y = chr / texperrow;
+    const int texwidth = charpos_x * font->fontwidth;
+    const int texheight = charpos_y * font->fontheight;
+    const float pixwidth = 1.0f / font->width;
+    const float pixheight = 1.0f / font->height;
+    const float offset_w = pixwidth * 0.05f;
+    const float offset_h = pixheight * 0.05f; 
 
-    float xmin = texwidth * pixwidth;
-    float ymin = texheight * pixheight;
-    float xmax = (texwidth + font->fontwidth) * pixwidth;
-    float ymax = (texheight + font->fontheight) * pixheight;
+    const float xmin = texwidth * pixwidth + offset_w;
+    const float ymin = texheight * pixheight + offset_h;
+    const float xmax = (texwidth + font->fontwidth) * pixwidth - offset_w;
+    const float ymax = (texheight + font->fontheight) * pixheight - offset_h;
 
     uvs[0] = xmax; uvs[1] = ymax;
     uvs[2] = xmin; uvs[3] = ymax;

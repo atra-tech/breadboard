@@ -446,12 +446,12 @@ guirender(void)
         shaderloadviewmat(shader, guicam.viewmat);
         shaderloadmodelmat(shader, layer->modelmat);
 
-        glBindVertexArray(layer->vbo.vao);
+        vbufbindvao(&layer->vbo);
+
         glDisable(GL_CULL_FACE);
         glDisable(GL_DEPTH_TEST);
 
-        glDrawElements(GL_TRIANGLES, layer->vbo.indxcount,
-                GL_UNSIGNED_INT, NULL);
+        atra_drawtriangles(&layer->vbo);
 
         shaderunbind();
 
@@ -465,10 +465,9 @@ guirender(void)
             shaderloadviewmat(shader, guicam.viewmat);
             shaderloadmodelmat(shader, layer->modelmat);
 
-            glBindVertexArray(layer->fontvbo.vao);
+            vbufbindvao(&layer->fontvbo);
 
-            glDrawElements(GL_TRIANGLES, layer->fontvbo.indxcount,
-                    GL_UNSIGNED_INT, NULL);
+            atra_drawtriangles(&layer->fontvbo);
 
             shaderunbind();
         }
@@ -513,7 +512,7 @@ guimeshscrollbar(GUIElement *elem, float totalrows, float x_min, float y_min,
     vec3 norm = {0, 0, 1};
     ivec3 index;
     float barsize, barpos, disttop;
-    uint indexcount = vbo->indxcount / 3;
+    uint indexcount = vbo->indexcount - vbo->indexcount / 3;
 
     x_min = x_max + bar->x_offset;
     x_max += bar->width + bar->x_offset;
@@ -574,7 +573,6 @@ guimeshscrollbar(GUIElement *elem, float totalrows, float x_min, float y_min,
     vbufaddindex(vbo, index);
 
     indexcount += 4;
-    vbo->indxcount += 12;
 
     /* Render scroll bar */
     vert[0] = x_max - bar->bar_w_offset;
@@ -610,8 +608,6 @@ guimeshscrollbar(GUIElement *elem, float totalrows, float x_min, float y_min,
     index[1] = indexcount + 3;
     index[2] = indexcount + 0;
     vbufaddindex(vbo, index);
-
-    vbo->indxcount += 12;
 }
 
 /* Compose the mesh for the given frame and its children,
@@ -788,7 +784,7 @@ guipushquad(VBuffer *vbo, float x_min, float y_min,
     vec2 uv;
     vec3 norm = {0, 0, 1};
     ivec3 index;
-    int indexbase = vbo->indxcount / 3;
+    int indexbase = vbo->indexcount - vbo->indexcount / 3;
 
     vert[2] = depth;
 
@@ -825,8 +821,6 @@ guipushquad(VBuffer *vbo, float x_min, float y_min,
     index[1] = indexbase + 3;
     index[2] = indexbase + 0;
     vbufaddindex(vbo, index);
-
-    vbo->indxcount += 12;
 }
 
 void
@@ -837,7 +831,7 @@ guipushquadinverted(VBuffer *vbo, float x_min, float y_min,
     vec2 uv;
     vec3 norm = {0, 0, 1};
     ivec3 index;
-    int indexbase = vbo->indxcount / 3;
+    int indexbase = vbo->indexcount - vbo->indexcount / 3;
 
     vert[2] = depth;
 
@@ -874,8 +868,6 @@ guipushquadinverted(VBuffer *vbo, float x_min, float y_min,
     index[1] = indexbase + 3;
     index[2] = indexbase + 0;
     vbufaddindex(vbo, index);
-
-    vbo->indxcount += 12;
 }
 
 void
@@ -946,18 +938,6 @@ guicursormouseset(GUIElement *elem, int mx, int my)
         rel_x = (rel_x + elem->x) * next->w;
         rel_w *= elem->w;
 
-        /*if (next->attr & GUI_ATTR_WH_RESIZE) {
-                rel_y = (rel_y + rel_elem->y) * next->w * next->ratio_h;
-            } else {
-                rel_y = (rel_y + rel_elem->y) * next->h;
-            }
-
-            if (rel_elem->attr & GUI_ATTR_WH_RESIZE) {
-                rel_h *= rel_elem->w * rel_elem->ratio_h;
-            } else {
-                rel_h *= rel_elem->h;
-            }*/
-
         if (next->attr & GUI_ATTR_WH_RESIZE) {
             rel_y = (rel_y + elem->y) * next->w * next->ratio_h;
         } else {
@@ -977,9 +957,6 @@ guicursormouseset(GUIElement *elem, int mx, int my)
     rel_w *= elem->w * guicam.width;
 
     if (elem->attr & GUI_ATTR_WH_RESIZE) {
-        /*  y_min = (rel_y + rel_elem->y) * guicam.width;
-            y_max = y_min + rel_h * rel_elem->w * rel_elem->ratio_h * guicam.width;
-        */
         rel_y = (rel_y + elem->y) * guicam.width + (*transvec)[1];
         rel_h *= elem->w * elem->ratio_h * guicam.width;
     } else {
@@ -1937,7 +1914,7 @@ guimeshfont(GUITextGrid *grid, GUIElement *elem)
     ivec3 index;
     uchar chr;
 
-    indexcount = vbo->indxcount / 3;
+    indexcount = vbo->indexcount - vbo->indexcount / 3;
     read = grid->startrow * grid->colcount;
     viewsize = grid->colcount * grid->rowcount;
 
@@ -2006,7 +1983,6 @@ guimeshfont(GUITextGrid *grid, GUIElement *elem)
             vbufaddindex(vbo, index);
 
             indexcount += 4;
-            vbo->indxcount += 12;
         }
     }
     totalrows = grid->glyphs->size / grid->colcount;
@@ -2050,8 +2026,6 @@ guimeshfont(GUITextGrid *grid, GUIElement *elem)
         index[1] = cursoridx + 3;
         index[2] = cursoridx + 0;
         vbufaddindex(vbo, index);
-
-        vbo->indxcount += 12;
     }
 
     return totalrows;

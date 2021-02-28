@@ -23,12 +23,12 @@ typedef SDL_Color Color;
 typedef struct {
     uint vao;
     uint vbocount;
-    uint indxcount;
+    uint indexcount;
     IVecList buffers;
     VecList verts;
     VecList uvs;
     VecList norms;
-    IVecList indxs;
+    IVecList indexes;
 } VBuffer;
 
 typedef struct {
@@ -78,9 +78,10 @@ void vbufreset(VBuffer *);
 void vbufresetnoclear(VBuffer *);
 void vbufdelete(VBuffer *);
 
+void atra_drawtriangles(VBuffer *vbo);
+
 void fbufinit(FBuffer *, uint width, uint height, uint comp, uint attach);
 void fbufbind(FBuffer *);
-//void fbufreset(FBuffer *);
 void fbufdelete(FBuffer *);
 
 void shaderinit(Shader *shader, const char *vertsrc, const char *fragsrc);
@@ -114,11 +115,7 @@ void texsetactivetexture(uint texunit);
 void texsetsampleruniform(uint program, const char *name, uint texunit);
 void texdelete(Texture *);
 void texquit(void);
-//int texloadfont(Texture *tex, const char *font, const char *text, int size);
-//void texfindfont(Texture *tex, const char *font, const char *text, int size);
-//int texgetfont(Texture *tex, const char *font, const char *text,
-//               int size, Color color);
-//void texdeletefonts(void);
+
 void fontinit(void);
 void fontload(FontTex *, const char *path, int width, int height);
 void fontbind(FontTex *);
