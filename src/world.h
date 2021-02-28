@@ -115,7 +115,7 @@ typedef struct FreeSegment {
 
 typedef struct Segment {
     int x, y, dirty, changed;
-    VBuffer vbo, wirevbo, textvbo;
+    VBuffer bgvbo, wirevbo, textvbo;
     VecList colors, textcolors;
     mat4 modelmat;
     Layer layers[LAYER_TOTAL];
@@ -164,8 +164,7 @@ int freesegisempty(FreeSegment *seg);
 
 SelectBox * selboxget(void);
 void setmouseseg(FreeSegment *seg);
-
-int mouseisfree(void);
+int getmousemode(void);
 void guidisablewirebuttons(void);
 
 Segment * worldgetsegment(World *world, uint x, uint y);

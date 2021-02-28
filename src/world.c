@@ -134,8 +134,6 @@ static float packuvs[PACKTEX_TOTAL * 8];
 static float inpackuvs[2 * 8];
 static float outpackuvs[2 * 8];
 static float pinuvs[PINTEX_TOTAL * 8];
-static float selboxedgeuvs[8];
-static float selboxcorneruvs[8];
 static SelectBox selbox;
 
 void
@@ -201,6 +199,8 @@ worldstart(void)
     init = 1;
 }
 
+/* Frees all allocated resources.
+ * Should be called at every standard exit point. */
 void
 worldshutdown(void)
 {
@@ -225,6 +225,9 @@ worldshutdown(void)
     init = 0;
 }
 
+/* Allocates memory and initialises a new world.
+ * This world initialiser is intended to be used for worlds that
+ * will be displayed to the user. */
 World *
 worldcreate(void)
 {
@@ -253,7 +256,7 @@ worldcreate(void)
 }
 
 /* Creates a world with the minimum initialisation required for
- * quick conversion of circuit data */
+ * quick conversion of circuit data.  Used for sub-circuit packages. */
 World *
 worldcreatefake(void)
 {
@@ -309,6 +312,27 @@ worldpop(void)
 void
 worldswitch(World *world)
 {
+    uint i;
+    Segment *seg;
+    Package *pack;
+    Entity *player;
+
+    /* Reposition camera */
+    player = getmaincamera()->boundent;
+    player->x = 512;
+    player->y = 512;
+
+    for (i = 0; i < SEGMENT_COUNT; i++) {
+        seg = world->segs[i];
+
+        if (seg->packs->size) {
+            pack = listat(seg->packs, 0);
+            player->x = pack->x + (pack->w * 0.5f) + seg->x * SEGMENT_SIZE;
+            player->y = pack->y + (pack->h * 0.5f) + seg->y * SEGMENT_SIZE;
+            break;
+        }
+    }
+
     worlddelete(stacktop(worldstack));
     stackpop(worldstack);
     worldpush(world);
@@ -372,7 +396,7 @@ segmentinit(Segment *seg, uint x, uint y)
     seg->dirty = 1;
     seg->packs = listcreate();
 
-    vbufinit(&seg->vbo);
+    vbufinit(&seg->bgvbo);
     vbufinit(&seg->wirevbo);
     vbufinit(&seg->textvbo);
     veclistinit(&seg->colors, 3);
@@ -390,7 +414,7 @@ segmentinit(Segment *seg, uint x, uint y)
 void
 segmentdelete(Segment *seg)
 {
-    vbufdelete(&seg->vbo);
+    vbufdelete(&seg->bgvbo);
     vbufdelete(&seg->wirevbo);
     vbufdelete(&seg->textvbo);
     veclistdelete(&seg->colors);
@@ -450,9 +474,6 @@ selboxinit(SelectBox *box)
     box->enabled = 0;
     glm_mat4_identity(box->modelmat);
     vbufinit(&box->vbo);
-
-    texget(&circuittex, 4, 3, selboxedgeuvs);
-    texget(&circuittex, 5, 3, selboxcorneruvs);
 }
 
 SelectBox *
@@ -467,6 +488,7 @@ selboxdelete(SelectBox *box)
     vbufdelete(&box->vbo);
 }
 
+/* Handle user input events for the currently active world */
 void
 worldhandle(Event *e)
 {
@@ -527,11 +549,6 @@ worldhandle(Event *e)
                     mouseseg = NULL;
                     mousemode = MOUSE_NONE;
                     circuitrebuild(mainworld, &mainworld->circuit);
-                } else {
-                    /* TODO: Indicate placement error in some way
-                     *       (Do it inside freesegmerge, maybe?)
-                     *          Floating tooltip following mouse?
-                     *          Highlight offending element in red for a time? */
                 }
             } else if (mousemode == MOUSE_BOXREADY) {
                 if (pointintersectsquad(wmx, wmy,
@@ -820,10 +837,9 @@ worldrender(Camera *cam)
                 segmentmesh(seg);
                 seg->dirty = 0;
             }
-            vbufbindvao(&seg->vbo);
+            vbufbindvao(&seg->bgvbo);
             shaderloadmodelmat(&bgshader, seg->modelmat);
-            glDrawElements(GL_TRIANGLES,
-                    seg->vbo.indxcount, GL_UNSIGNED_INT, NULL);
+            atra_drawtriangles(&seg->bgvbo);
         }
     }
 
@@ -844,8 +860,7 @@ worldrender(Camera *cam)
 
             vbufbindvao(&seg->wirevbo);
             shaderloadmodelmat(&worldshader, seg->modelmat);
-            glDrawElements(GL_TRIANGLES,
-                    seg->wirevbo.indxcount, GL_UNSIGNED_INT, NULL);
+            atra_drawtriangles(&seg->wirevbo);
         }
     }
 
@@ -862,8 +877,7 @@ worldrender(Camera *cam)
 
             vbufbindvao(&seg->textvbo);
             shaderloadmodelmat(&worldshader, seg->modelmat);
-            glDrawElements(GL_TRIANGLES,
-                    seg->textvbo.indxcount, GL_UNSIGNED_INT, NULL);
+            atra_drawtriangles(&seg->textvbo);
         }
     }
 
@@ -876,8 +890,7 @@ worldrender(Camera *cam)
         shaderloadmodelmat(&indicatorshader, selbox.modelmat);
         shaderaddvec4(&indicatorshader, "color", selectboxcolor);
         glLineWidth(SELBOX_THICKNESS);
-        glDrawElements(GL_LINES,
-                selbox.vbo.indxcount, GL_UNSIGNED_INT, NULL);
+        glDrawElements(GL_LINE_LOOP, selbox.vbo.indexcount, GL_UNSIGNED_INT, NULL);
     }
     shaderunbind();
 }
@@ -894,15 +907,13 @@ worldrendermouseseg()
         shaderloadmodelmat(&worldshader, mouseseg->modelmat);
 
         vbufbindvao(&mouseseg->wirevbo);
-        glDrawElements(GL_TRIANGLES,
-                mouseseg->wirevbo.indxcount, GL_UNSIGNED_INT, NULL);
+        atra_drawtriangles(&mouseseg->wirevbo);
     
         /* Render text */
         fontbind(&fonttex);
 
         vbufbindvao(&mouseseg->textvbo);
-        glDrawElements(GL_TRIANGLES,
-                mouseseg->textvbo.indxcount, GL_UNSIGNED_INT, NULL);
+        atra_drawtriangles(&mouseseg->textvbo);
     }
     shaderunbind();
 }
@@ -954,15 +965,15 @@ segmentmesh(Segment *seg)
     const float *color;
     VBuffer *vbo;
 
-    vbufreset(&seg->vbo);
+    vbufreset(&seg->bgvbo);
     vbufreset(&seg->wirevbo);
     vbufreset(&seg->textvbo);
     veclistclear(&seg->colors);
     veclistclear(&seg->textcolors);
     
     /* Draw background */
-    idxcount = 0;
-    vbo = &seg->vbo;
+    vbo = &seg->bgvbo;
+    idxcount = vbo->indexcount - vbo->indexcount / 3;
     vert[2] = 0.0f;
 
     for (i = 0; i < 4; i++) {
@@ -975,9 +986,7 @@ segmentmesh(Segment *seg)
     vbufaddindex(vbo, index);
     SET_INDEX(index, idxcount, 2, 3, 0);
     vbufaddindex(vbo, index);
-
     idxcount += 4;
-    vbo->indxcount += 12;
     
     /* Draw wires */
     layermesh(seg, &seg->layers[wireorder[2]], colors[wireorder[2]], 1);
@@ -990,7 +999,7 @@ segmentmesh(Segment *seg)
 
     for (l = 0; l < seg->packs->size; l++) {
         vbo = &seg->wirevbo;
-        idxcount = vbo->indxcount / 3;
+        idxcount = vbo->indexcount - vbo->indexcount / 3;
         pack = listat(seg->packs, l);
 
         textcolor[0] = packtextcolor[0];
@@ -1023,9 +1032,7 @@ segmentmesh(Segment *seg)
                 vbufaddindex(vbo, index);
                 SET_INDEX(index, idxcount, 2, 3, 0);
                 vbufaddindex(vbo, index);
-
                 idxcount += 4;
-                vbo->indxcount += 12;
             } 
         }
 
@@ -1057,9 +1064,7 @@ segmentmesh(Segment *seg)
             vbufaddindex(vbo, index);
             SET_INDEX(index, idxcount, 2, 3, 0);
             vbufaddindex(vbo, index);
-            
             idxcount += 4;
-            vbo->indxcount += 12;
         }
         for (i = 0; i < pack->out_pins.size; i++) {
             pin = dlistat(&pack->out_pins, i);
@@ -1088,15 +1093,13 @@ segmentmesh(Segment *seg)
             vbufaddindex(vbo, index);
             SET_INDEX(index, idxcount, 2, 3, 0);
             vbufaddindex(vbo, index);
-            
             idxcount += 4;
-            vbo->indxcount += 12;
         }
 
         /* Draw text */
         if (pack->type != PACK_INPUT && pack->type != PACK_OUTPUT) {
             vbo = &seg->textvbo;
-            idxcount = vbo->indxcount / 3;
+            idxcount = vbo->indexcount - vbo->indexcount / 3;
 
             /* Body text */
             len = strlen(pack->name);
@@ -1150,7 +1153,7 @@ segmentmesh(Segment *seg)
         } else {
             /* Draw Input/Output pack text */
             vbo = &seg->textvbo;
-            idxcount = vbo->indxcount / 3;
+            idxcount = vbo->indexcount - vbo->indexcount / 3;
 
             len = strlen(pack->name);
             
@@ -1170,7 +1173,7 @@ segmentmesh(Segment *seg)
         }
 
     }
-    vbufbind(&seg->vbo);
+    vbufbind(&seg->bgvbo);
     vbufbind(&seg->wirevbo);
     vbufbindvbo(&seg->wirevbo, &seg->colors);
     vbufbind(&seg->textvbo);
@@ -1185,7 +1188,7 @@ layermesh(Segment *seg, Layer *layer, const float *color, uint depth)
     vec2 uv;
     ivec3 index;
 
-    idxcount = seg->wirevbo.indxcount / 3;
+    idxcount = seg->wirevbo.indexcount - seg->wirevbo.indexcount / 3;
     vert[2] = depth;
 
     for (i = 0; i < SEGMENT_SIZE; i++) {
@@ -1217,9 +1220,7 @@ layermesh(Segment *seg, Layer *layer, const float *color, uint depth)
                 vbufaddindex(&seg->wirevbo, index);
                 SET_INDEX(index, idxcount, 2, 3, 0);
                 vbufaddindex(&seg->wirevbo, index);
-
                 idxcount += 4;
-                seg->wirevbo.indxcount += 12;
             } else {
                 tilenib = tile & 0xF;
 
@@ -1235,9 +1236,7 @@ layermesh(Segment *seg, Layer *layer, const float *color, uint depth)
                 vbufaddindex(&seg->wirevbo, index);
                 SET_INDEX(index, idxcount, 2, 3, 0);
                 vbufaddindex(&seg->wirevbo, index);
-
                 idxcount += 4;
-                seg->wirevbo.indxcount += 12;
             }
         }
     }
@@ -1262,7 +1261,7 @@ freesegmesh(FreeSegment *seg)
     veclistclear(&seg->textcolors);
     
     vbo = &seg->wirevbo;
-    idxcount = vbo->indxcount / 3;
+    idxcount = vbo->indexcount - vbo->indexcount / 3;
 
     /* Draw wires */
     for (l = 0; l < LAYER_TOTAL; l++) {
@@ -1298,9 +1297,7 @@ freesegmesh(FreeSegment *seg)
                     vbufaddindex(vbo, index);
                     SET_INDEX(index, idxcount, 2, 3, 0);
                     vbufaddindex(vbo, index);
-
                     idxcount += 4;
-                    vbo->indxcount += 12;
                 } else {
                     tilenib = tile & 0xF;
 
@@ -1316,9 +1313,7 @@ freesegmesh(FreeSegment *seg)
                     vbufaddindex(vbo, index);
                     SET_INDEX(index, idxcount, 2, 3, 0);
                     vbufaddindex(vbo, index);
-
                     idxcount += 4;
-                    vbo->indxcount += 12;
                 }
             }
         }
@@ -1327,7 +1322,7 @@ freesegmesh(FreeSegment *seg)
     /* Draw packages */
     for (l = 0; l < seg->packs->size; l++) {
         vbo = &seg->wirevbo;
-        idxcount = vbo->indxcount / 3;
+        idxcount = vbo->indexcount - vbo->indexcount / 3;
         pack = listat(seg->packs, l);
         vert[2] = 4.0f;
 
@@ -1348,9 +1343,7 @@ freesegmesh(FreeSegment *seg)
                 vbufaddindex(vbo, index);
                 SET_INDEX(index, idxcount, 2, 3, 0);
                 vbufaddindex(vbo, index);
-
                 idxcount += 4;
-                vbo->indxcount += 12;
             } 
         }
 
@@ -1382,9 +1375,7 @@ freesegmesh(FreeSegment *seg)
             vbufaddindex(vbo, index);
             SET_INDEX(index, idxcount, 2, 3, 0);
             vbufaddindex(vbo, index);
-            
             idxcount += 4;
-            vbo->indxcount += 12;
         }
         for (i = 0; i < pack->out_pins.size; i++) {
             pin = dlistat(&pack->out_pins, i);
@@ -1413,18 +1404,15 @@ freesegmesh(FreeSegment *seg)
             vbufaddindex(vbo, index);
             SET_INDEX(index, idxcount, 2, 3, 0);
             vbufaddindex(vbo, index);
-            
             idxcount += 4;
-            vbo->indxcount += 12;
         }
+        vbo = &seg->textvbo;
+        idxcount = vbo->indexcount - vbo->indexcount / 3;
+        len = strlen(pack->name);
 
         /* Draw text */
         if (pack->type != PACK_INPUT && pack->type != PACK_OUTPUT) {
-            vbo = &seg->textvbo;
-            idxcount = vbo->indxcount / 3;
-
             /* Body text */
-            len = strlen(pack->name);
             x_min = (pack->x + (pack->w * 0.5f)) - 
                 ((PACK_FONT_SIZE + FONT_GAP) * len - FONT_GAP) *
                 PIX_SIZE * 0.5f;
@@ -1473,11 +1461,6 @@ freesegmesh(FreeSegment *seg)
             }
         } else {
             /* Draw Input/Output pack text */
-            vbo = &seg->textvbo;
-            idxcount = vbo->indxcount / 3;
-
-            len = strlen(pack->name);
-            
             if (pack->type == PACK_INPUT) {
                 x_min = pack->x - 8 * PIX_SIZE - 
                     ((IO_FONT_SIZE + FONT_GAP) * len - FONT_GAP) * PIX_SIZE;
@@ -1580,7 +1563,7 @@ drawtext(VBuffer *vbo, VecList *colors, const char *text, uint fontsize,
     ivec3 index;
     uchar chr;
 
-    idxcount = vbo->indxcount / 3;
+    idxcount = vbo->indexcount - vbo->indexcount / 3;
     len = strlen(text);
     vert[2] = 5.0f;
 
@@ -1622,13 +1605,9 @@ drawtext(VBuffer *vbo, VecList *colors, const char *text, uint fontsize,
         vbufaddindex(vbo, index);
         SET_INDEX(index, idxcount, 2, 3, 0);
         vbufaddindex(vbo, index);
-
         idxcount += 4;
-        vbo->indxcount += 12;
     }
 }
-
-
 
 void
 selboxmesh(SelectBox *box)
@@ -1645,10 +1624,10 @@ selboxmesh(SelectBox *box)
 
     vbufreset(vbo);
 
-    x_min = box->x; //box->x + SELBOX_THICKNESS / 2.0f;
-    x_max = x_min + box->w; //x_min + box->w - SELBOX_THICKNESS;
-    y_min = box->y; //box->y + SELBOX_THICKNESS / 2.0f;
-    y_max = y_min + box->h; //y_min + box->h - SELBOX_THICKNESS;
+    x_min = box->x;
+    x_max = x_min + box->w;
+    y_min = box->y;
+    y_max = y_min + box->h;
 
     vert[0] = x_max;
     vert[1] = y_min;
@@ -1668,19 +1647,15 @@ selboxmesh(SelectBox *box)
 
     index[0] = 0;
     index[1] = 1;
-    index[2] = 1;
+    index[2] = 2;
     vbufaddindex(vbo, index);
 
-    index[0] = 2;
-    index[1] = 2;
-    index[2] = 3;
-    vbufaddindex(vbo, index);
-    
     index[0] = 3;
     index[1] = 0;
+    index[2] = 0;
     vbufaddindex(vbo, index);
-
-    vbo->indxcount = 8;
+    
+    vbo->indexcount = 4;
 
     vbufbind(vbo);
 }
@@ -2184,8 +2159,7 @@ guibuttonnotdown(GUIElement *elem, ...)
         pack = packcreate(PACK_NOT, NULL);
         listpushback(seg->packs, pack);
         freesegmesh(seg);
-        mouseseg = seg;
-        mousemode = MOUSE_GRAB;
+        setmouseseg(seg);
         elem->layer->dirty = 1;
         selbox.enabled = 0;
     }
@@ -2207,8 +2181,7 @@ guibuttonordown(GUIElement *elem, ...)
         pack = packcreate(PACK_OR, NULL);
         listpushback(seg->packs, pack);
         freesegmesh(seg);
-        mouseseg = seg;
-        mousemode = MOUSE_GRAB;
+        setmouseseg(seg);
         elem->layer->dirty = 1;
         selbox.enabled = 0;
     }
@@ -2230,8 +2203,7 @@ guibuttonanddown(GUIElement *elem, ...)
         pack = packcreate(PACK_AND, NULL);
         listpushback(seg->packs, pack);
         freesegmesh(seg);
-        mouseseg = seg;
-        mousemode = MOUSE_GRAB;
+        setmouseseg(seg);
         elem->layer->dirty = 1;
         selbox.enabled = 0;
     }
@@ -2253,8 +2225,7 @@ guibuttonxordown(GUIElement *elem, ...)
         pack = packcreate(PACK_XOR, NULL);
         listpushback(seg->packs, pack);
         freesegmesh(seg);
-        mouseseg = seg;
-        mousemode = MOUSE_GRAB;
+        setmouseseg(seg);
         elem->layer->dirty = 1;
         selbox.enabled = 0;
     }
@@ -2276,8 +2247,7 @@ guibuttonindown(GUIElement *elem, ...)
         pack = packcreate(PACK_INPUT, NULL);
         listpushback(seg->packs, pack);
         freesegmesh(seg);
-        mouseseg = seg;
-        mousemode = MOUSE_GRAB;
+        setmouseseg(seg);
         elem->layer->dirty = 1;
         selbox.enabled = 0;
     }
@@ -2299,8 +2269,7 @@ guibuttonoutdown(GUIElement *elem, ...)
         pack = packcreate(PACK_OUTPUT, NULL);
         listpushback(seg->packs, pack);
         freesegmesh(seg);
-        mouseseg = seg;
-        mousemode = MOUSE_GRAB;
+        setmouseseg(seg);
         elem->layer->dirty = 1;
         selbox.enabled = 0;
     }
@@ -2322,8 +2291,7 @@ guibuttonclockdown(GUIElement *elem, ...)
         pack = packcreate(PACK_CLOCK, NULL);
         listpushback(seg->packs, pack);
         freesegmesh(seg);
-        mouseseg = seg;
-        mousemode = MOUSE_GRAB;
+        setmouseseg(seg);
         elem->layer->dirty = 1;
         selbox.enabled = 0;
     }
@@ -2345,8 +2313,7 @@ guibuttonmemorydown(GUIElement *elem, ...)
         pack = packcreate(PACK_MEMORY, NULL);
         listpushback(seg->packs, pack);
         freesegmesh(seg);
-        mouseseg = seg;
-        mousemode = MOUSE_GRAB;
+        setmouseseg(seg);
         elem->layer->dirty = 1;
         selbox.enabled = 0;
     }
@@ -2368,8 +2335,7 @@ guibuttonconnectordown(GUIElement *elem, ...)
         pack = packcreate(PACK_CONNECTOR, NULL);
         listpushback(seg->packs, pack);
         freesegmesh(seg);
-        mouseseg = seg;
-        mousemode = MOUSE_GRAB;
+        setmouseseg(seg);
         elem->layer->dirty = 1;
         selbox.enabled = 0;
     }
@@ -2467,9 +2433,9 @@ guibuttonbluedown(GUIElement *elem, ...)
 }
 
 int
-mouseisfree(void)
+getmousemode(void)
 {
-    return (mousemode == MOUSE_NONE);
+    return mousemode;
 }
 
 void
