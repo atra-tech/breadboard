@@ -11,10 +11,11 @@ uniform mat4 modelmat;
 
 void main()
 {
-    vec4 matdiffuse = texture2D(albedo_map, uvout).rgba;
+    vec4 matdiffuse = texture2D(albedo_map, uvout);
 
-    if (matdiffuse.a < 0.1)
+    if (matdiffuse.a < 0.1) {
         discard;
+    }
 
     Color = vec4(matdiffuse.rgb * wirecolor, matdiffuse.a);
 }
