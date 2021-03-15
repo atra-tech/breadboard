@@ -165,7 +165,7 @@ typedef struct GUIElem {
 
 void guiinit(Camera *gamecam);
 GUIElement *guielemcreate(float x, float y, float w, float h,
-        int type, int attr, const char *id);
+        int attr, const char *id);
 GUILayer *guilayercreate(const char *vshader, const char *fshader,
         const char *texpath);
 GUITextGrid *guitextgridcreate(uint font_w, uint font_h,

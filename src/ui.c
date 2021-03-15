@@ -1,7 +1,9 @@
 /*
- *  BREADBOARD (2020)
+ *  BREADBOARD (2021)
  *
- *  Copyright Robert Saarloos, All rights reserved.
+ *  Copyright (c), Robert Saarloos.
+ *
+ *  Full license can be found in the LICENSE file
  *
  *  Description:
  *  User interface related functions and data.
@@ -228,7 +230,7 @@ ui_fileload_show(void)
     files.select_enabled = 0;
     files.select_index = 0;
 
-    ui_elem_hide("ui_packload_base");
+    ui_packload_hide();
     ui_elem_show("ui_fileload_base");
     ui_filelist_elems_calcpos();
 }
@@ -481,7 +483,6 @@ ui_packsave_init(void)
 
     base = guielemcreate(
             0.2f, 0.5f, 0.6f, 0.2f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE |
             GUI_ATTR_HASBORDER |
             GUI_ATTR_BLOCKING,
@@ -489,13 +490,11 @@ ui_packsave_init(void)
 
     msg = guielemcreate(
             0.1f, 0.8f, 0.8f, 0.1f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXT,
             "ui_packsave_msg");
 
     textfield = guielemcreate(
             0.1f, 0.5f, 0.8f, 0.2f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE |
             GUI_ATTR_HASBORDER |
             GUI_ATTR_HASTEXT |
@@ -504,28 +503,24 @@ ui_packsave_init(void)
 
     savebutton = guielemcreate(
             0.2f, 0.1f, 0.2f, 0.2f,
-            GUI_CUSTOM,
             GUI_ATTR_CLICKABLE |
             GUI_ATTR_HASTEXTURE,
             "ui_packsave_button_save");
 
     savebutton_text = guielemcreate(
             0.0f, 0.0f, 1.0f, 1.0f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXT |
             GUI_ATTR_NOCAPTURE,
             "ui_packsave_button_save_text");
 
     cancelbutton = guielemcreate(
             0.6f, 0.1f, 0.2f, 0.2f,
-            GUI_CUSTOM,
             GUI_ATTR_CLICKABLE |
             GUI_ATTR_HASTEXTURE,
             "ui_packsave_button_cancel");
 
     cancelbutton_text = guielemcreate(
             0.0f, 0.0f, 1.0f, 1.0f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXT |
             GUI_ATTR_NOCAPTURE,
             "ui_packsave_button_cancel_text");
@@ -603,14 +598,12 @@ ui_packload_init(void)
 
     base = guielemcreate(
             0.8f, 0.5f, 0.2f, 0.2f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE |
             GUI_ATTR_HASBORDER,
             "ui_packload_base");
 
     filelist = guielemcreate(
             0.0f, 0.0f, 1.0f, 1.0f,
-            GUI_CUSTOM,
             0,
             "ui_packload_filelist");
 
@@ -655,7 +648,6 @@ ui_packload_entry_init(const char *name, GUIElement *parent)
 
     entry = guielemcreate(
             0.0f, 0.0f, 1.0f, 0.2f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE |
             GUI_ATTR_CLICKABLE,
             elemname);
@@ -664,7 +656,6 @@ ui_packload_entry_init(const char *name, GUIElement *parent)
 
     text = guielemcreate(
             0.0f, 0.0f, 1.0f, 1.0f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXT |
             GUI_ATTR_NOCAPTURE,
             elemname);
@@ -706,7 +697,6 @@ ui_filesave_init(void)
 
     base = guielemcreate(
             0.2f, 0.5f, 0.6f, 0.2f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE |
             GUI_ATTR_HASBORDER |
             GUI_ATTR_BLOCKING,
@@ -714,13 +704,11 @@ ui_filesave_init(void)
 
     msg = guielemcreate(
             0.1f, 0.8f, 0.8f, 0.1f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXT,
             "ui_filesave_msg");
 
     textfield = guielemcreate(
             0.1f, 0.5f, 0.8f, 0.2f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE |
             GUI_ATTR_HASBORDER |
             GUI_ATTR_HASTEXT |
@@ -729,28 +717,24 @@ ui_filesave_init(void)
 
     savebutton = guielemcreate(
             0.2f, 0.1f, 0.2f, 0.2f,
-            GUI_CUSTOM,
             GUI_ATTR_CLICKABLE |
             GUI_ATTR_HASTEXTURE,
             "ui_filesave_button_save");
 
     savebutton_text = guielemcreate(
             0.0f, 0.0f, 1.0f, 1.0f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXT |
             GUI_ATTR_NOCAPTURE,
             "ui_filesave_button_save_text");
 
     cancelbutton = guielemcreate(
             0.6f, 0.1f, 0.2f, 0.2f,
-            GUI_CUSTOM,
             GUI_ATTR_CLICKABLE |
             GUI_ATTR_HASTEXTURE,
             "ui_filesave_button_cancel");
 
     cancelbutton_text = guielemcreate(
             0.0f, 0.0f, 1.0f, 1.0f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXT |
             GUI_ATTR_NOCAPTURE,
             "ui_filesave_button_cancel_text");
@@ -830,7 +814,6 @@ ui_fileload_init(void)
 
     base = guielemcreate(
             0.25f, 0.5f, 0.5f, 0.2f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE |
             GUI_ATTR_HASBORDER |
             GUI_ATTR_BLOCKING,
@@ -838,48 +821,41 @@ ui_fileload_init(void)
     
     filelist = guielemcreate(
             0.0f, 0.2f, 1.0f, 0.8f,
-            GUI_CUSTOM,
             0,
             "ui_fileload_filelist");
 
     open = guielemcreate(
             0.05f, 0.05f, 0.25f, 0.1f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE |
             GUI_ATTR_CLICKABLE,
             "ui_fileload_open");
 
     delete = guielemcreate(
             0.375f, 0.05f, 0.25f, 0.1f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE |
             GUI_ATTR_CLICKABLE,
             "ui_fileload_delete");
 
     cancel = guielemcreate(
             0.7f, 0.05f, 0.25f, 0.1f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE |
             GUI_ATTR_CLICKABLE,
             "ui_fileload_cancel");
 
     open_text = guielemcreate(
             0.0f, 0.0f, 1.0f, 1.0f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXT |
             GUI_ATTR_NOCAPTURE,
             "ui_fileload_opentext");
 
     delete_text = guielemcreate(
             0.0f, 0.0f, 1.0f, 1.0f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXT |
             GUI_ATTR_NOCAPTURE,
             "ui_fileload_deletetext");
 
     cancel_text = guielemcreate(
             0.0f, 0.0f, 1.0f, 1.0f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXT |
             GUI_ATTR_NOCAPTURE,
             "ui_fileload_canceltext");
@@ -958,7 +934,6 @@ ui_fileload_entry_init(const char *name, GUIElement *parent)
 
     entry = guielemcreate(
             0.0f, 0.0f, 1.0f, 0.2f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE |
             GUI_ATTR_CLICKABLE,
             elemname);
@@ -967,7 +942,6 @@ ui_fileload_entry_init(const char *name, GUIElement *parent)
 
     text = guielemcreate(
             0.0f, 0.0f, 1.0f, 1.0f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXT |
             GUI_ATTR_NOCAPTURE,
             elemname);
@@ -1007,7 +981,6 @@ ui_tooltip_init(void)
 
     base = guielemcreate(
             0.0f, 0.0f, 0.05f, 0.1f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE |
             GUI_ATTR_HASBORDER |
             GUI_ATTR_NOCAPTURE,
@@ -1015,7 +988,6 @@ ui_tooltip_init(void)
 
     textbox = guielemcreate(
             0.1f, 0.1f, 0.8f, 0.8f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXT |
             GUI_ATTR_NOCAPTURE,
             "ui_tooltip_text");
@@ -1055,7 +1027,6 @@ ui_dialogbox_init(void)
 
     base = guielemcreate(
             0.2f, 0.5f, 0.6f, 0.2f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE |
             GUI_ATTR_HASBORDER |
             GUI_ATTR_BLOCKING,
@@ -1063,7 +1034,6 @@ ui_dialogbox_init(void)
 
     textbox = guielemcreate(
             0.05f, 0.35f, 0.9f, 0.55f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXT  |
             GUI_ATTR_WRAPTEXT |
             GUI_ATTR_MULTILINE |
@@ -1072,14 +1042,12 @@ ui_dialogbox_init(void)
 
     button = guielemcreate(
             0.4f, 0.1f, 0.2f, 0.2f,
-            GUI_CUSTOM,
             GUI_ATTR_CLICKABLE |
             GUI_ATTR_HASTEXTURE,
             "ui_dialog_button");
 
     button_text = guielemcreate(
             0.0f, 0.0f, 1.0f, 1.0f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXT |
             GUI_ATTR_NOCAPTURE,
             "ui_dialog_button_text");
@@ -1131,7 +1099,6 @@ ui_confirmbox_init()
 
     base = guielemcreate(
             0.2f, 0.5f, 0.6f, 0.2f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE |
             GUI_ATTR_HASBORDER |
             GUI_ATTR_BLOCKING,
@@ -1139,7 +1106,6 @@ ui_confirmbox_init()
 
     textbox = guielemcreate(
             0.05f, 0.35f, 0.9f, 0.55f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXT  |
             GUI_ATTR_WRAPTEXT |
             GUI_ATTR_MULTILINE |
@@ -1148,42 +1114,36 @@ ui_confirmbox_init()
 
     button[0] = guielemcreate(
             0.1f, 0.1f, 0.2f, 0.2f,
-            GUI_CUSTOM,
             GUI_ATTR_CLICKABLE |
             GUI_ATTR_HASTEXTURE,
             "ui_confirmbox_but1");
 
     button_text[0] = guielemcreate(
             0.0f, 0.0f, 1.0f, 1.0f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXT |
             GUI_ATTR_NOCAPTURE,
             "ui_confirmbox_but1_text");
 
     button[1] = guielemcreate(
             0.4f, 0.1f, 0.2f, 0.2f,
-            GUI_CUSTOM,
             GUI_ATTR_CLICKABLE |
             GUI_ATTR_HASTEXTURE,
             "ui_confirmbox_but2");
 
     button_text[1] = guielemcreate(
             0.0f, 0.0f, 1.0f, 1.0f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXT |
             GUI_ATTR_NOCAPTURE,
             "ui_confirmbox_but2_text");
 
     button[2] = guielemcreate(
             0.7f, 0.1f, 0.2f, 0.2f,
-            GUI_CUSTOM,
             GUI_ATTR_CLICKABLE |
             GUI_ATTR_HASTEXTURE,
             "ui_confirmbox_but3");
 
     button_text[2] = guielemcreate(
             0.0f, 0.0f, 1.0f, 1.0f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXT |
             GUI_ATTR_NOCAPTURE,
             "ui_confirmbox_but3_text");
@@ -1259,7 +1219,6 @@ ui_iorename_init(void)
 
     base = guielemcreate(
             0.2f, 0.5f, 0.6f, 0.2f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE |
             GUI_ATTR_HASBORDER |
             GUI_ATTR_BLOCKING,
@@ -1267,13 +1226,11 @@ ui_iorename_init(void)
 
     msg = guielemcreate(
             0.1f, 0.8f, 0.8f, 0.1f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXT,
             "ui_iorename_msg");
 
     textfield = guielemcreate(
             0.1f, 0.5f, 0.8f, 0.2f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE |
             GUI_ATTR_HASBORDER |
             GUI_ATTR_HASTEXT |
@@ -1282,28 +1239,24 @@ ui_iorename_init(void)
 
     confirmbutton = guielemcreate(
             0.2f, 0.1f, 0.2f, 0.2f,
-            GUI_CUSTOM,
             GUI_ATTR_CLICKABLE |
             GUI_ATTR_HASTEXTURE,
             "ui_iorename_button_confirm");
 
     confirmbutton_text = guielemcreate(
             0.0f, 0.0f, 1.0f, 1.0f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXT |
             GUI_ATTR_NOCAPTURE,
             "ui_iorename_button_confirm_text");
 
     cancelbutton = guielemcreate(
             0.6f, 0.1f, 0.2f, 0.2f,
-            GUI_CUSTOM,
             GUI_ATTR_CLICKABLE |
             GUI_ATTR_HASTEXTURE,
             "ui_iorename_button_cancel");
 
     cancelbutton_text = guielemcreate(
             0.0f, 0.0f, 1.0f, 1.0f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXT |
             GUI_ATTR_NOCAPTURE,
             "ui_iorename_button_cancel_text");

@@ -1,11 +1,13 @@
 /*
- *  BREADBOARD (2020)
+ *  BREADBOARD (2021)
  *
- *  Copyright Robert Saarloos, All rights reserved.
+ *  Copyright (c), Robert Saarloos.
+ *
+ *  Full license can be found in the LICENSE file
  *
  *  Description:
- *  Structures and functions for the logical representation
- *  of circuit simulation.
+ *  Structures and functions for the logical representation used for
+ *  circuit simulation.
  *
  *  */
 
@@ -255,7 +257,6 @@ packcreate(uint type, const char *path)
     Package *pack;
 
     pack = calloc(1, sizeof(Package));
-    pack->clockrate = DEFAULT_CLOCK_RATE;
     pack->changed = 1;
     pack->type = type;
     dlistinit(&pack->in_pins, sizeof(Pin));
@@ -266,9 +267,6 @@ packcreate(uint type, const char *path)
     }
 
     switch (type) {
-    case PACK_CIRCUIT:
-        //packload(pack, path);
-        break;
     case PACK_NOT:
         packinit_not(pack);
         break;
@@ -806,6 +804,7 @@ circuitupdatefull(Circuit *circuit, float dt)
     circuitupdate(circuit, dt);
 }
 
+/*  */
 void
 circuitrebuild(struct World *world, Circuit **circuit)
 {
@@ -816,6 +815,8 @@ circuitrebuild(struct World *world, Circuit **circuit)
     circuitupdatefull(*circuit, 0.0f);
 }
 
+/* Recursively reset the error flags and wire convergence counts for
+ * the given circuit and its sub-circuits */
 void
 circuitclearerrors(Circuit *circuit)
 {
@@ -1020,12 +1021,19 @@ packfunc_output(Package *pack)
 void
 packfunc_clock(Package *pack)
 {
+    static uint errorclear = 0;
+
     Pin *out;
 
+    if (errorclear >= WIRE_CONVERGE_EXTRA / 2) {
+        circuitclearerrors(worldtop()->circuit);
+        errorclear = 0;
+    }
+    errorclear++;
     out = dlistat(&pack->out_pins, 0);
     
     if (pack->time >= (1.0f / pack->clockrate)) {
-        pack->time -= (1.0f / pack->clockrate);
+        pack->time = 0;
         out->state = !out->state;
     }
 }
@@ -1225,11 +1233,12 @@ void
 packinit_clock(Package *pack)
 {
     Pin pin;
-
+    
     pack->w = PACK_CLK_W;
     pack->h = PACK_CLK_H;
     pack->func = packfunc_clock;
     pack->name = malloc(6 * sizeof(char));
+    pack->clockrate = DEFAULT_CLOCK_RATE;
     memcpy(pack->name, "CLOCK", 6 * sizeof(char));
 
     pininit(pack, &pin, PACK_CLK_W, 0, "");

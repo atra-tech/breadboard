@@ -1,7 +1,9 @@
 /*
- *  BREADBOARD (2020)
+ *  BREADBOARD (2021)
  *
- *  Copyright Robert Saarloos, All rights reserved.
+ *  Copyright (c), Robert Saarloos.
+ *
+ *  Full license can be found in the LICENSE file
  *
  *  Description:
  *  User interface related functions and data.
@@ -12,7 +14,7 @@
 #ifndef UI_H
 #define UI_H
 
-#include <cglm/cglm.h>
+#include "cglm/cglm.h"
 
 #include "util/util.h"
 #include "util/list.h"

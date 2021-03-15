@@ -1,7 +1,9 @@
 /*
- *  BREADBOARD (2020)
+ *  BREADBOARD (2021)
  *
- *  Copyright Robert Saarloos, All rights reserved.
+ *  Copyright (c), Robert Saarloos.
+ *
+ *  Full license can be found in the LICENSE file
  *
  *  Description:
  *  Structures for managing the grid-based world, and the visual
@@ -53,9 +55,8 @@ static void drawtext(VBuffer *vbo, VecList *colors, const char *text,
         uint fontsize, const float *color, float x_min, float x_max,
         float y_min, float y_max);
 
-/*  
- *  VERTEX DATA
- *  */
+
+/* VERTEX DATA */
 
 static const float segmentverts[] = {
     SEGMENT_SIZE, 0.0f,         0.0f,
@@ -1870,6 +1871,7 @@ freesegmerge(FreeSegment *seg, int x, int y)
     return 1;
 }
 
+/* Returns 1 if free segment */
 int
 freesegisempty(FreeSegment *seg)
 {
@@ -1895,6 +1897,7 @@ freesegisempty(FreeSegment *seg)
     return 1;
 }
 
+/* Initialise wire texture UV coordinates */
 void
 wirecalcuvs(void)
 {
@@ -1922,6 +1925,7 @@ wiremovetotop(uint wire)
     }
 }
 
+/* 2D point-quad collision detection */
 int
 pointintersectsquad(float px, float py, float x, float y, float w, float h)
 {
@@ -1931,6 +1935,7 @@ pointintersectsquad(float px, float py, float x, float y, float w, float h)
     );
 }
 
+/* 2D quad-quad collision detection */
 int
 quadintersectsquad(float ax, float ay, float aw, float ah,
         float bx, float by, float bw, float bh)
@@ -1987,6 +1992,7 @@ segmentgettile(Segment *seg, uint x, uint y, uint layer)
     return &seg->layers[layer].tiles[y + x * SEGMENT_SIZE];
 }
 
+/* Set the current mouse-bound segment and update mouse mode. */
 void
 setmouseseg(FreeSegment *seg)
 {
@@ -1997,10 +2003,11 @@ setmouseseg(FreeSegment *seg)
     mousemode = MOUSE_GRAB;
 }
 
+
 /*
  *  GUI DEFINITIONS
  *
- *  Here be dragons
+ *  Toolbar, file toolbar and package toolbar functions.
  */
 
 static void guibuttonmouseover(GUIElement *elem, ...);
@@ -2623,11 +2630,10 @@ guifilebarcreate(void)
             "res/texture/gui.png");
 
     base = guielemcreate(FILEBAR_X, FILEBAR_Y + 0.001, FILEBAR_W, FILEBAR_H,
-            GUI_CUSTOM, GUI_ATTR_HASTEXTURE, "filebar_base");
+            GUI_ATTR_HASTEXTURE, "filebar_base");
     
     base_right = guielemcreate(FILEBAR_BTN_W * (FILEBAR_NBTNS - 1), 0.0f,
             FILEBAR_BTN_W * 2, FILEBAR_BTN_H,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE | GUI_ATTR_NOCAPTURE,
             "filebar_base_right");
 
@@ -2636,7 +2642,6 @@ guifilebarcreate(void)
             FILEBAR_OFFSET_H,
             FILEBAR_BTN_W - FILEBAR_OFFSET_W * 2.0f,
             1.0f - FILEBAR_OFFSET_H * 2.0f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE |
             GUI_ATTR_CLICKABLE,
             "filebar_new");
@@ -2646,7 +2651,6 @@ guifilebarcreate(void)
             FILEBAR_OFFSET_H,
             FILEBAR_BTN_W - FILEBAR_OFFSET_W * 2.0f,
             1.0f - FILEBAR_OFFSET_H * 2.0f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE |
             GUI_ATTR_CLICKABLE,
             "filebar_open");
@@ -2656,25 +2660,21 @@ guifilebarcreate(void)
             FILEBAR_OFFSET_H,
             FILEBAR_BTN_W - FILEBAR_OFFSET_W * 2.0f,
             1.0f - FILEBAR_OFFSET_H * 2.0f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE |
             GUI_ATTR_CLICKABLE,
             "filebar_save");
 
     new_icon = guielemcreate(0.1f, 0.1f, 0.8f, 0.8f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE |
             GUI_ATTR_NOCAPTURE,
             "filebar_new_icon");
     
     open_icon = guielemcreate(0.1f, 0.1f, 0.8f, 0.8f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE |
             GUI_ATTR_NOCAPTURE,
             "filebar_open_icon");
 
     save_icon = guielemcreate(0.1f, 0.1f, 0.8f, 0.8f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE |
             GUI_ATTR_NOCAPTURE,
             "filebar_save_icon");
@@ -2730,12 +2730,14 @@ guipackbarcreate(void)
             "res/shader/guifrag.glsl",
             "res/texture/gui.png");
 
-    base = guielemcreate(PACKBAR_X + 0.001, PACKBAR_Y + 0.001, PACKBAR_W, PACKBAR_H,
-            GUI_CUSTOM, GUI_ATTR_HASTEXTURE, "packbar_base");
+    base = guielemcreate(
+            PACKBAR_X + 0.001, PACKBAR_Y + 0.001,
+            PACKBAR_W, PACKBAR_H,
+            GUI_ATTR_HASTEXTURE,
+            "packbar_base");
     
     base_left = guielemcreate(0.0f - PACKBAR_BTN_W, 0.0f,
             PACKBAR_BTN_W * 2, PACKBAR_BTN_H,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE | GUI_ATTR_NOCAPTURE,
             "packbar_base_left");
 
@@ -2744,7 +2746,6 @@ guipackbarcreate(void)
             PACKBAR_OFFSET_H,
             PACKBAR_BTN_W - PACKBAR_OFFSET_W * 2.0f,
             1.0f - PACKBAR_OFFSET_H * 2.0f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE |
             GUI_ATTR_CLICKABLE,
             "packbar_open");
@@ -2754,19 +2755,16 @@ guipackbarcreate(void)
             PACKBAR_OFFSET_H,
             PACKBAR_BTN_W - PACKBAR_OFFSET_W * 2.0f,
             1.0f - PACKBAR_OFFSET_H * 2.0f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE |
             GUI_ATTR_CLICKABLE,
             "packbar_save");
 
     open_icon = guielemcreate(0.1f, 0.1f, 0.8f, 0.8f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE |
             GUI_ATTR_NOCAPTURE,
             "packbar_open_icon");
 
     save_icon = guielemcreate(0.1f, 0.1f, 0.8f, 0.8f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE |
             GUI_ATTR_NOCAPTURE,
             "packbar_save_icon");
@@ -2816,17 +2814,15 @@ guitoolbarcreate(void)
             "res/texture/gui.png");
 
     base = guielemcreate(TOOLBAR_X, TOOLBAR_Y, TOOLBAR_W, TOOLBAR_H,
-            GUI_CUSTOM, GUI_ATTR_HASTEXTURE, "toolbar_base");
+            GUI_ATTR_HASTEXTURE, "toolbar_base");
     
     base_left = guielemcreate(0.0f - TOOLBAR_BTN_W, 0.0f,
             TOOLBAR_BTN_W * 2, TOOLBAR_BTN_H,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE | GUI_ATTR_NOCAPTURE,
             "toolbar_base_left");
 
     base_right = guielemcreate(TOOLBAR_BTN_W * (BUTTON_TOTAL - 1), 0.0f,
             TOOLBAR_BTN_W * 2, TOOLBAR_BTN_H,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE | GUI_ATTR_NOCAPTURE,
             "toolbar_base_right");
 
@@ -2836,12 +2832,10 @@ guitoolbarcreate(void)
                 TOOLBAR_OFFSET_H,
                 TOOLBAR_BTN_W - TOOLBAR_OFFSET_W * 2.0f,
                 1.0f - TOOLBAR_OFFSET_H * 2.0f,
-                GUI_CUSTOM,
                 GUI_ATTR_HASTEXTURE |
                 GUI_ATTR_CLICKABLE,
                 toolbarnames[i]);
         icons[i] = guielemcreate(0.1f, 0.1f, 0.8f, 0.8f,
-            GUI_CUSTOM,
             GUI_ATTR_HASTEXTURE |
             GUI_ATTR_NOCAPTURE,
             toolbariconnames[i]);

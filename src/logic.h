@@ -1,11 +1,13 @@
 /*
- *  BREADBOARD (2020)
+ *  BREADBOARD (2021)
  *
- *  Copyright Robert Saarloos, All rights reserved.
+ *  Copyright (c), Robert Saarloos.
+ *
+ *  Full license can be found in the LICENSE file
  *
  *  Description:
- *  Structures and functions for the logical representation
- *  of circuit simulation.
+ *  Structures and functions for the logical representation used for
+ *  circuit simulation.
  *
  *  */
 
@@ -90,7 +92,7 @@ typedef struct Circuit {
 typedef struct Package {
     uint x, y, w, h, seg_x, seg_y;
     uint type;
-    uint clockrate; /* Ticks per second */
+    uint clockrate; /* Ticks per second (Hz / 2) */
     float time;
     uint changed;
     uint error;

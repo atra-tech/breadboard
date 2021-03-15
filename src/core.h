@@ -1,8 +1,11 @@
 /*
- *  BREADBOARD (2020)
+ *  BREADBOARD (2021)
  *
- *  Copyright Robert Saarloos, All rights reserved.
+ *  Copyright (c), Robert Saarloos.
  *
+ *  Full license can be found in the LICENSE file
+ *
+ *  Description:
  *  Provides obfuscation for engine initialisation, setup, and functions
  *  to get pointers to core variables (window and context).
  *

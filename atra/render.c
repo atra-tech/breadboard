@@ -121,11 +121,11 @@ vbufreset(VBuffer *vbo)
 {
     uint i;
 
-    glDeleteVertexArrays(1, &vbo->vao);
-    
     for (i = 0; i < vbo->buffers.size; i++) {
         glDeleteBuffers(1, (uint *)iveclistat(&vbo->buffers, i));
     }
+    glDeleteVertexArrays(1, &vbo->vao);
+    
     iveclistclear(&vbo->buffers);
     veclistclear(&vbo->verts);
     veclistclear(&vbo->uvs);
@@ -141,11 +141,11 @@ void
 vbufdelete(VBuffer *vbo)
 {
     uint i;
-    glDeleteVertexArrays(1, &vbo->vao);
 
     for (i = 0; i < vbo->buffers.size; i++) {
         glDeleteBuffers(1, (uint *)iveclistat(&vbo->buffers, i));
     }
+    glDeleteVertexArrays(1, &vbo->vao);
 
     iveclistdelete(&vbo->buffers);
     veclistdelete(&vbo->verts);

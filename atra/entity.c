@@ -10,7 +10,7 @@
 
 #include <math.h>
 #include <stdlib.h>
-#include <cglm/cglm.h>
+#include "cglm/cglm.h"
 
 #include "entity.h"
 #include "util/log.h"

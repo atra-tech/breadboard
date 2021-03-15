@@ -11,7 +11,7 @@
 #ifndef ATRA_ENTITY_H
 #define ATRA_ENTITY_H
 
-#include <cglm/cglm.h>
+#include "cglm/cglm.h"
 
 #define DEFAULT_CAM_ZOOM 128.0f
 #define DEFAULT_CAM_FOV 70.0f

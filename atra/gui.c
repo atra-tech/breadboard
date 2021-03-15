@@ -38,7 +38,6 @@ static int mcaptured;
 static int interrupt;
 
 static int guimouseintersects(GUIElement *elem, int mx, int my);
-static void guisetattrtemplate(GUIElement *elem, int type, int attr);
 static int guihandlemouse(GUIElement *elem, Event *e);
 static int guihandlekeyboard(GUIElement *elem, Event *e);
 static void guisetfocus(GUIElement *elem);
@@ -85,8 +84,7 @@ guiinit(Camera *gamecam)
 
 /* Create a new gui element, must be deleted with guideleteelem() */
 GUIElement *
-guielemcreate(float x, float y, float w, float h,
-        int type, int attr, const char *id)
+guielemcreate(float x, float y, float w, float h, int attr, const char *id)
 {
     GUIElement *elem = calloc(1, sizeof(GUIElement));
     char *key;
@@ -100,7 +98,7 @@ guielemcreate(float x, float y, float w, float h,
     elem->w = w;
     elem->h = h;
     elem->children = listcreate();
-    guisetattrtemplate(elem, type, attr);
+    elem->attr = attr;
 
     if (id) {
         key = strdup(id);
@@ -109,44 +107,6 @@ guielemcreate(float x, float y, float w, float h,
     listpushback(elemlist, elem);
 
     return elem;
-}
-
-void
-guisetattrtemplate(GUIElement *elem, int type, int attr)
-{
-    switch (type) {
-    case GUI_CUSTOM:
-        elem->attr = attr;
-        break;
-    case GUI_FRAME:
-        elem->attr = GUI_ATTR_HASTEXTURE |
-                     GUI_ATTR_HASBORDER |
-                     attr;
-        break;
-    case GUI_WINDOW:
-        elem->attr = GUI_ATTR_HASTEXTURE |
-                     GUI_ATTR_HASBORDER |
-                     GUI_ATTR_MOVABLE |
-                     GUI_ATTR_RESIZABLE |
-                     attr;
-        break;
-    case GUI_BUTTON:
-        elem->attr = GUI_ATTR_HASTEXTURE |
-                     GUI_ATTR_CLICKABLE |
-                     attr;
-        break;
-    case GUI_TEXTBOX:
-        elem->attr = GUI_ATTR_HASTEXT |
-                     attr;
-        break;
-    case GUI_TEXTFIELD:
-        elem->attr = GUI_ATTR_HASTEXT |
-                     GUI_ATTR_TEXTINPUT |
-                     attr;
-        break;
-    default:
-        elem->attr = 0;
-    }
 }
 
 /* Creates a new empty layer, must be deleted with guideletelayer() */
@@ -1491,13 +1451,11 @@ guishutdown(void)
         }
         guideletelayer(layer);
     }
+
     listdelete(elemlist);
     listdelete(layerstack);
     htabledeallockeys(elemtable);
     htabledelete(elemtable);
-    elemlist = NULL;
-    layerstack = NULL;
-    elemtable = NULL;
 }
 
 GUITextGrid *
@@ -2157,13 +2115,15 @@ guikbdnewline(GUIElement *elem)
 {
     GUITextGrid *grid = elem->textgrid;
     GUIGlyph *data;
-
-    data = malloc(sizeof(GUIGlyph));
-    data->c = '\n';
-    listinsert(grid->glyphs, data, grid->cursor.pos);
-    guitextreadtext(elem);
-    guitextwritetext(elem);
-    guicursormoveright(grid);
+    
+    if (elem->attr & GUI_ATTR_MULTILINE) {
+        data = malloc(sizeof(GUIGlyph));
+        data->c = '\n';
+        listinsert(grid->glyphs, data, grid->cursor.pos);
+        guitextreadtext(elem);
+        guitextwritetext(elem);
+        guicursormoveright(grid);
+    }
 }
 
 void
@@ -2202,12 +2162,14 @@ guikbdtab(GUIElement *elem)
     GUITextGrid *grid = elem->textgrid;
     GUIGlyph *data;
 
-    data = malloc(sizeof(GUIGlyph));
-    data->c = '\t';
-    listinsert(grid->glyphs, data, grid->cursor.pos);
-    guitextreadtext(elem);
-    guitextwritetext(elem);
-    guicursormoveright(grid);
+    if (elem->attr & GUI_ATTR_MULTILINE) {
+        data = malloc(sizeof(GUIGlyph));
+        data->c = '\t';
+        listinsert(grid->glyphs, data, grid->cursor.pos);
+        guitextreadtext(elem);
+        guitextwritetext(elem);
+        guicursormoveright(grid);
+    }
 }
 
 void 

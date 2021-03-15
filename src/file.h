@@ -1,11 +1,12 @@
 /*
- *  BREADBOARD (2020)
+ *  BREADBOARD (2021)
  *
- *  Copyright Robert Saarloos, All rights reserved.
+ *  Copyright (c), Robert Saarloos.
+ *
+ *  Full license can be found in the LICENSE file
  *
  *  Description:
- *  Provides a set of tools for world data serialisation,
- *  saving, and loading.
+ *  Provides a set of tools for world data serialisation, saving, and loading.
  *
  *  */
 

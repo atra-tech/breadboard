@@ -11,7 +11,7 @@
 #ifndef ATRA_RENDER_H
 #define ATRA_RENDER_H
 
-#include <cglm/cglm.h>
+#include "cglm/cglm.h"
 
 #include "entity.h"
 #include "opengl.h"

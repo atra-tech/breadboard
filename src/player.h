@@ -1,7 +1,9 @@
 /*
- *  BREADBOARD (2020)
+ *  BREADBOARD (2021)
  *
- *  Copyright Robert Saarloos, All rights reserved.
+ *  Copyright (c), Robert Saarloos.
+ *
+ *  Full license can be found in the LICENSE file
  *
  *  Description:
  *  Controllable entity for navigating the simulator world.
@@ -11,7 +13,7 @@
 #ifndef PLAYER_H
 #define PLAYER_H
 
-#include <cglm/cglm.h>
+#include "cglm/cglm.h"
 #include "render.h"
 
 typedef struct Player {

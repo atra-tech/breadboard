@@ -1,7 +1,7 @@
 TARGET_EXEC ?= breadboard
 
 BUILD_DIR ?= ./bin
-SRC_DIRS ?= ./src ./atra
+SRC_DIRS ?= ./src ./atra ./vendor/cglm/include
 
 SRCS := $(shell find $(SRC_DIRS) -name *.cpp -or -name *.c -or -name *.s)
 OBJS := $(SRCS:%=$(BUILD_DIR)/%.o)
