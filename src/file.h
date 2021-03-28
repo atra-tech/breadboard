@@ -36,7 +36,7 @@ enum data_tag {
     TAG_ARRAY,
     TAG_SEG,
     TAG_PACK,
-    TAG_PIN,
+    TAG_PIN, /* UNUSED. DO NOT REMOVE! */
     TAG_CIRCUIT,
     TAG_MEMORY
 };

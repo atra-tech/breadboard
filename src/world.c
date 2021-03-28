@@ -994,7 +994,6 @@ segmentmesh(Segment *seg)
     layermesh(seg, &seg->layers[wireorder[1]], colors[wireorder[1]], 2);
     layermesh(seg, &seg->layers[wireorder[0]], colors[wireorder[0]], 3);
     
-    
     /* Draw packages */
     vert[2] = 4.0f;
 

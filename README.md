@@ -2,10 +2,11 @@
 
 ## Dependencies
 
-* OpenGL 3.3 compatible graphics card and driver
+* An OpenGL 3.3 compatible graphics adapter and driver
 * SDL2
 * SDL2\_image
 * GLEW
+* CGLM (provided with source)
 
 ## Compiling
 
@@ -24,8 +25,12 @@ The resulting executable is `win32/breadboard.exe`
 **NOTE:**  File paths are absolute at this time, so running the executable from the project's root directory is imperative for the program to be able to find and load resources.
 
 #### Linux
+Run `run.sh` from the project's root directory.
+OR
 Run `bin/breadboard` from the directory that this README file is in.
 
 #### Windows
+Run `run.bat` from the project's root directory.
+OR
 Run `win32/breadboard.exe` from the directory that this README file is in.
 

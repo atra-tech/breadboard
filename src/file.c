@@ -112,10 +112,6 @@ filedata_grow(FileData *data)
 {
     byte *newmem = realloc(data->data, data->cap * 2);
 
-    if (!newmem) {
-        logprint(LOG_FATAL, "file: Unable to reallocate memory");
-        die("Fatal error has occurred.  Shutting down...");
-    }
     data->data = newmem;
     data->cap *= 2;
 }
@@ -182,7 +178,7 @@ read_segment(byte **data, Segment *seg)
     layer_dat = malloc(LAYER_TILECOUNT * sizeof(uint));
 
     /* Read layer data */
-    for (i = 0; i < 3; i++) {
+    for (i = 0; i < LAYER_TOTAL; i++) {
         rle_decode(data, layer_dat, LAYER_TILECOUNT);
         
         for (j = 0; j < LAYER_TILECOUNT; j++) {
@@ -336,7 +332,7 @@ write_body(FileData *data, World *world)
         seg = world->segs[i];
         hasdata = 0;
 
-        for (j = 0; j < 3; j++) {
+        for (j = 0; j < LAYER_TOTAL; j++) {
             for (k = 0; k < LAYER_TILECOUNT; k++) {
                 hasdata += seg->layers[j].tiles[k].state;
             }
@@ -364,7 +360,7 @@ write_segment(FileData *data, Segment *seg)
     Package *pack;
 
     /* Write segment tile data */
-    for (i = 0; i < 3; i++) {
+    for (i = 0; i < LAYER_TOTAL; i++) {
         layer = &seg->layers[i];
         layer_dat = malloc(LAYER_TILECOUNT * sizeof(uint));
 
