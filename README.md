@@ -18,7 +18,7 @@ The resulting executable is `bin/breadboard`.
 Run `win-compile.sh` (Linux) or `win-compile.bat` (Windows) to compile the application for Windows.
 The resulting executable is `win32/breadboard.exe`
 
-**NOTE:**  Compiling for Windows requires MinGW with GCC
+**NOTE:**  Compiling for Windows requires MinGW with GCC along with associated dependencies.
 
 ## Running
 

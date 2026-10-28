@@ -455,6 +455,40 @@ sortpacklist(List *packs)
     listdelete(sorted);
 }
 
+/* Reorders by vertical placement, rather than by name */
+void
+sortpacklist_byposition(List *packs) {
+    uint i, min_idx;
+    List *sorted;
+    Package *pack, *pack_min;
+
+    sorted = listcreate();
+
+    while (packs->size > 0) {
+        pack_min = listat(packs, 0);
+        min_idx = 0;
+
+        for (i = 1; i < packs->size; i++) {
+            pack = listat(packs, i);
+
+            const int pack_y = pack->y + pack->seg_y * SEGMENT_SIZE;
+            const int pack_min_y = pack_min->y + pack_min->seg_y * SEGMENT_SIZE;
+
+            if (pack_y > pack_min_y) {
+                pack_min = pack;
+                min_idx = i;
+            }
+        }
+        listpushback(sorted, pack_min);
+        listremove(packs, min_idx);
+    }
+    
+    for (i = 0; i < sorted->size; i++) {
+        listpushback(packs, listat(sorted, i));
+    }
+    listdelete(sorted);
+}
+
 /* Builds a package with circuit, basing size and 
  * pins on circuit's input and output packages */
 void
@@ -479,8 +513,10 @@ packbindcircuit(Package *pack, Circuit *circuit)
             listpushback(out_nodes, pack_tmp);
         }
     }
-    sortpacklist(in_nodes);
-    sortpacklist(out_nodes);
+    //sortpacklist(in_nodes);
+    //sortpacklist(out_nodes);
+    sortpacklist_byposition(in_nodes);
+    sortpacklist_byposition(out_nodes);
 
     /* Set package dimensions appropriately */
     if (in_nodes->size > out_nodes->size) {

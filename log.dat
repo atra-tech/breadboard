@@ -1,0 +1,65 @@
+[INFO]  Initialising Atra Engine ALPHA 0.1.4
+[INFO]  Initialising state system...
+[INFO]  Compiling shader: res/shader/worldvert.glsl
+[INFO]  Compiling shader: res/shader/worldfrag.glsl
+[INFO]  Linking program
+[INFO]  Compiling shader: res/shader/bgvert.glsl
+[INFO]  Compiling shader: res/shader/bgfrag.glsl
+[INFO]  Linking program
+[INFO]  Compiling shader: res/shader/indicatorvert.glsl
+[INFO]  Compiling shader: res/shader/indicatorfrag.glsl
+[INFO]  Linking program
+[INFO]  Compiling shader: res/shader/guivert.glsl
+[INFO]  Compiling shader: res/shader/guifrag.glsl
+[INFO]  Linking program
+[INFO]  Compiling shader: res/shader/guivert.glsl
+[INFO]  Compiling shader: res/shader/guifrag.glsl
+[INFO]  Linking program
+[INFO]  Compiling shader: res/shader/guivert.glsl
+[INFO]  Compiling shader: res/shader/guifrag.glsl
+[INFO]  Linking program
+[INFO]  Compiling shader: res/shader/guivert.glsl
+[INFO]  Compiling shader: res/shader/guifrag.glsl
+[INFO]  Linking program
+[INFO]  Compiling shader: res/shader/fontvert.glsl
+[INFO]  Compiling shader: res/shader/fontfrag.glsl
+[INFO]  Linking program
+[INFO]  Compiling shader: res/shader/guivert.glsl
+[INFO]  Compiling shader: res/shader/guifrag.glsl
+[INFO]  Linking program
+[INFO]  Compiling shader: res/shader/fontvert.glsl
+[INFO]  Compiling shader: res/shader/fontfrag.glsl
+[INFO]  Linking program
+[INFO]  Compiling shader: res/shader/guivert.glsl
+[INFO]  Compiling shader: res/shader/guifrag.glsl
+[INFO]  Linking program
+[INFO]  Compiling shader: res/shader/fontvert.glsl
+[INFO]  Compiling shader: res/shader/fontfrag.glsl
+[INFO]  Linking program
+[INFO]  Compiling shader: res/shader/guivert.glsl
+[INFO]  Compiling shader: res/shader/guifrag.glsl
+[INFO]  Linking program
+[INFO]  Compiling shader: res/shader/fontvert.glsl
+[INFO]  Compiling shader: res/shader/fontfrag.glsl
+[INFO]  Linking program
+[INFO]  Compiling shader: res/shader/guivert.glsl
+[INFO]  Compiling shader: res/shader/guifrag.glsl
+[INFO]  Linking program
+[INFO]  Compiling shader: res/shader/fontvert.glsl
+[INFO]  Compiling shader: res/shader/fontfrag.glsl
+[INFO]  Linking program
+[INFO]  Compiling shader: res/shader/guivert.glsl
+[INFO]  Compiling shader: res/shader/guifrag.glsl
+[INFO]  Linking program
+[INFO]  Compiling shader: res/shader/fontvert.glsl
+[INFO]  Compiling shader: res/shader/fontfrag.glsl
+[INFO]  Linking program
+[INFO]  Compiling shader: res/shader/guivert.glsl
+[INFO]  Compiling shader: res/shader/guifrag.glsl
+[INFO]  Linking program
+[INFO]  Compiling shader: res/shader/fontvert.glsl
+[INFO]  Compiling shader: res/shader/fontfrag.glsl
+[INFO]  Linking program
+[INFO]  Compiling shader: res/shader/guivert.glsl
+[INFO]  Compiling shader: res/shader/guifrag.glsl
+

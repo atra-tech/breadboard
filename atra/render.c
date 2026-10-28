@@ -250,7 +250,7 @@ shadercompile(const char *path, GLenum type)
 
     if (loglength > 0) {
         char *info = calloc(loglength + 1, sizeof(char));
-        glGetProgramInfoLog(shaderid, loglength, NULL, info);
+        glGetShaderInfoLog(shaderid, loglength, NULL, info);
         logprint(LOG_FATAL, "shader: Unable to compile shader: $s", info);
         free(info);
     }
@@ -447,7 +447,7 @@ texload(Texture *tex, const char *path)
     glTexParameteri(GL_TEXTURE_2D,
                     GL_TEXTURE_MAG_FILTER,
                     GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 1);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 5);
     glGenerateMipmap(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, 0);
 

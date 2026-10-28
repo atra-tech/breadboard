@@ -99,7 +99,7 @@ Almost all functions are marked inline (always_inline) so compiler will probably
 To call pre-compiled version, just use `glmc_` (c stands for 'call') instead of `glm_`.
 
 ```C
-  #include <cglm/cglm.h>   /* for inline */
+  #include "cglm/cglm.h"   /* for inline */
   #include <cglm/call.h>   /* for library call (this also includes cglm.h) */
 
   mat4 rot, trans, rt;
@@ -234,7 +234,7 @@ it will compile docs into build folder, you can run index.html inside that funct
 ## How to use
 If you want to use the inline versions of functions, then include the main header
 ```C
-#include <cglm/cglm.h>
+#include "cglm/cglm.h"
 ```
 the header will include all headers. Then call the func you want e.g. rotate vector by axis:
 ```C

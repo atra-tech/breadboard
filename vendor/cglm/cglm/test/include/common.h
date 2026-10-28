@@ -20,7 +20,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <cglm/cglm.h>
+#include "cglm/cglm.h"
 #include <cglm/struct.h>
 #include <cglm/call.h>
 
