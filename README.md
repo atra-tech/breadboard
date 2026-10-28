@@ -1,4 +1,6 @@
-# Breadboard: Digital Logic Simulator
+# Breadboard: Digital Logic Simulator (2021)
+
+A final year university project made as proof that a fully functioning piece of graphical software could be made using my own game engine. This was made with an earlier iteration of the engine, and is the older version of this project. The controls are clunky, and the simulation has some bugs, but it is usable. A complete rework using the newest version of the game engine is currently under construction.
 
 ## Dependencies
 
@@ -34,3 +36,12 @@ Run `run.bat` from the project's root directory.
 OR
 Run `win32/breadboard.exe` from the directory that this README file is in.
 
+## Controls
+- W, A, S and D to pan the camera
+- Click components to lift off board and move.
+- Click again to drop components back onto board.
+- Left-click and drag to select components in an area.
+- Click selected components to lift all in outlined area.
+- Left-click and drag to draw wires of the selected colour.
+- Right-click to erase wires of the selected colour.
+- Click green input buttons to toggle their state.
